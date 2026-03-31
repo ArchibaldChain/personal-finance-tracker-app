@@ -1,0 +1,64 @@
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.parsers import registry
+from app.schemas.import_schema import ImportListResponse, ImportRead
+from app.services import import_service
+
+router = APIRouter(prefix="/imports", tags=["imports"])
+
+
+@router.post("", response_model=ImportRead, status_code=status.HTTP_201_CREATED)
+async def upload_import(
+    source_name: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> ImportRead:
+    # Validate the source name is a registered parser
+    try:
+        registry.get(source_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    content = await file.read()
+    file_name = file.filename or "upload.csv"
+
+    # Create the import record
+    import_record = import_service.create_import(db, source_name=source_name, file_name=file_name)
+
+    # Parse CSV to raw rows and store them
+    try:
+        parser = registry.get(source_name)
+        parse_results = parser.parse_csv(content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read CSV: {e}")
+
+    raw_rows = [(row_index, raw_dict) for row_index, raw_dict, _ in parse_results]
+    import_service.store_raw_rows(db, import_record.id, raw_rows)
+
+    db.refresh(import_record)
+    return ImportRead.model_validate(import_record)
+
+
+@router.get("", response_model=ImportListResponse)
+def list_imports(db: Session = Depends(get_db)) -> ImportListResponse:
+    imports = import_service.list_imports(db)
+    return ImportListResponse(items=[ImportRead.model_validate(i) for i in imports], total=len(imports))
+
+
+@router.get("/{import_id}", response_model=ImportRead)
+def get_import(import_id: int, db: Session = Depends(get_db)) -> ImportRead:
+    import_record = import_service.get_import(db, import_id)
+    if not import_record:
+        raise HTTPException(status_code=404, detail=f"Import {import_id} not found")
+    return ImportRead.model_validate(import_record)
+
+
+@router.post("/{import_id}/process", response_model=ImportRead)
+def process_import(import_id: int, db: Session = Depends(get_db)) -> ImportRead:
+    try:
+        import_record = import_service.process_import(db, import_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return ImportRead.model_validate(import_record)
