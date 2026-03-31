@@ -37,14 +37,27 @@ class WalmartRewardsParser(BaseParser):
             "amount": "Amount",
         }
 
+    @staticmethod
+    def _get(r: dict[str, str], *keys: str) -> str:
+        """Case-insensitive key lookup — tries each key, returns first non-empty match."""
+        for key in keys:
+            val = r.get(key.lower(), "").strip()
+            if val:
+                return val
+        return ""
+
     def parse_row(self, raw: dict[str, Any]) -> ParsedRow:
-        try:
-            transaction_date = datetime.strptime(raw["Date"].strip(), self.DATE_FORMAT).date()
-        except (KeyError, ValueError) as e:
-            raise ValueError(f"Invalid Date: {raw.get('Date')!r}") from e
+        # Normalize all keys to lowercase so column name capitalisation differences
+        # between CSV exports (e.g. "Merchant Name" vs "Merchant name") don't matter.
+        r = {k.lower(): v for k, v in raw.items()}
 
         try:
-            posted_date_str = raw.get("Posted Date", "").strip()
+            transaction_date = datetime.strptime(self._get(r, "date"), self.DATE_FORMAT).date()
+        except ValueError as e:
+            raise ValueError(f"Invalid Date: {r.get('date')!r}") from e
+
+        try:
+            posted_date_str = self._get(r, "posted date")
             posted_date = (
                 datetime.strptime(posted_date_str, self.DATE_FORMAT).date()
                 if posted_date_str
@@ -54,42 +67,44 @@ class WalmartRewardsParser(BaseParser):
             posted_date = None
 
         try:
-            raw_amount_str = raw["Amount"].strip()
-            # Strip leading/trailing quotes that sometimes appear in the export
-            raw_amount_str = raw_amount_str.strip('"')
-            # Separate the sign before stripping the $ symbol
+            raw_amount_str = self._get(r, "amount").strip('"')
             negative = raw_amount_str.startswith("-")
             cleaned = raw_amount_str.lstrip("-").lstrip("+").replace("$", "").replace(",", "").strip()
             magnitude = Decimal(cleaned)
             csv_amount = -magnitude if negative else magnitude
-        except (KeyError, Exception) as e:
-            raise ValueError(f"Invalid Amount: {raw.get('Amount')!r}") from e
+        except Exception as e:
+            raise ValueError(f"Invalid Amount: {r.get('amount')!r}") from e
 
         # Flip sign: CSV positive = expense → store as negative
         amount = -csv_amount
 
-        # Clean up reference number — CSV wraps it in extra quotes: """REF"""
-        ref = raw.get("Reference Number", "").strip().strip('"')
+        # Clean up reference number — CSV sometimes wraps it in extra quotes: """REF"""
+        ref = self._get(r, "reference number").strip('"')
         external_id = ref if ref else None
+
+        merchant_name = self._get(r, "merchant name")
 
         # If no reference number, generate a stable hash for deduplication
         if not external_id:
-            dedup_str = f"{transaction_date}|{raw.get('Merchant Name', '')}|{amount}"
+            dedup_str = f"{transaction_date}|{merchant_name}|{amount}"
             external_id = hashlib.md5(dedup_str.encode()).hexdigest()
 
-        merchant_raw = raw.get("Merchant Name", "").strip() or None
+        merchant_raw = merchant_name or None
+        merchant_category = self._get(r, "merchant category") or None
 
-        # Build a richer description from merchant name + city + country
+        # Build a richer description from merchant name + city + state + country
+        # Handle both "Merchant State/Province" and "Merchant State or Province"
         parts = [
-            raw.get("Merchant Name", "").strip(),
-            raw.get("Merchant City", "").strip(),
-            raw.get("Merchant State/Province", "").strip(),
-            raw.get("Merchant Country", "").strip(),
+            merchant_name,
+            merchant_category,
+            self._get(r, "merchant city"),
+            self._get(r, "merchant state/province", "merchant state or province"),
+            self._get(r, "merchant country"),
         ]
         description = ", ".join(p for p in parts if p) or None
 
         # Merchant category from MCC description
-        merchant_category = raw.get("Merchant Category", "").strip() or None
+        merchant_category = self._get(r, "merchant category") or None
         notes = f"MCC: {merchant_category}" if merchant_category else None
 
         return ParsedRow(
