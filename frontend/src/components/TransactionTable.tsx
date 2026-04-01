@@ -88,7 +88,18 @@ export default function TransactionTable({
                 </td>
                 <td style={styles.td}>
                   {tx.category ? (
-                    <span style={styles.badge}>{tx.category}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span style={styles.badge}>{tx.category}</span>
+                      {tx.classification_confidence !== null &&
+                        tx.classification_confidence < 0.7 && (
+                          <span
+                            title={`Low confidence: ${Math.round((tx.classification_confidence ?? 0) * 100)}%`}
+                            style={styles.lowConfidenceIcon}
+                          >
+                            ⚠
+                          </span>
+                        )}
+                    </span>
                   ) : (
                     <span style={{ color: '#9ca3af' }}>—</span>
                   )}
@@ -148,4 +159,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
   },
   truncate: { display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  lowConfidenceIcon: { color: '#d97706', fontSize: 13, cursor: 'default' },
 };

@@ -8,9 +8,9 @@ from app.parsers.chase_parser import ChaseParser
 from app.parsers.registry import registry
 from app.parsers.walmart_rewards_parser import WalmartRewardsParser
 
-# registry.register("chase", ChaseParser)
-# registry.register("bofa", BofAParser)
-registry.register("walmart rewards", WalmartRewardsParser)
-registry.register("bmo credit card", BMOParser)
+registry.register("chase", ChaseParser)
+registry.register("bofa", BofAParser)
+registry.register("walmart_rewards", WalmartRewardsParser)
+registry.register("bmo", BMOParser)
 
 __all__ = ["registry"]

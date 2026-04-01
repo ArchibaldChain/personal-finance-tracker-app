@@ -10,10 +10,11 @@ import client from './client';
 export async function listTransactions(
   filters: TransactionFilters = {}
 ): Promise<TransactionListResponse> {
-  const params: Record<string, string | number> = {};
+  const params: Record<string, string | number | boolean> = {};
   if (filters.search) params.search = filters.search;
   if (filters.category) params.category = filters.category;
   if (filters.source_type) params.source_type = filters.source_type;
+  if (filters.needs_review) params.needs_review = true;
   if (filters.sort_by) params.sort_by = filters.sort_by;
   if (filters.sort_dir) params.sort_dir = filters.sort_dir;
   if (filters.page) params.page = filters.page;

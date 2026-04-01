@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -29,6 +29,7 @@ class Transaction(Base):
 
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     subcategory: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    classification_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

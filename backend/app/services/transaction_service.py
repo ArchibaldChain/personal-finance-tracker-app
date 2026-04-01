@@ -3,8 +3,13 @@ from datetime import datetime, timezone
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
+from app.models.classification_log_model import ClassificationLog
 from app.models.transaction_model import Transaction
 from app.schemas.transaction_schema import TransactionCreate, TransactionUpdate
+from app.services import category_service
+from app.services.classification import get_classifier
+from app.services.classification.category_tree import build_category_tree
 
 # Whitelist of sortable fields to prevent SQL injection via sort_by param
 SORTABLE_FIELDS = {
@@ -15,12 +20,15 @@ SORTABLE_FIELDS = {
     "created_at": Transaction.created_at,
 }
 
+LOW_CONFIDENCE_THRESHOLD = 0.7
+
 
 def list_transactions(
     db: Session,
     search: str | None = None,
     category: str | None = None,
     source_type: str | None = None,
+    needs_review: bool = False,
     sort_by: str = "transaction_date",
     sort_dir: str = "desc",
     page: int = 1,
@@ -43,6 +51,12 @@ def list_transactions(
 
     if source_type:
         query = query.filter(Transaction.source_type == source_type)
+
+    if needs_review:
+        query = query.filter(
+            Transaction.classification_confidence.isnot(None),
+            Transaction.classification_confidence < LOW_CONFIDENCE_THRESHOLD,
+        )
 
     # Get total count before pagination
     total = query.with_entities(func.count(Transaction.id)).scalar() or 0
@@ -72,6 +86,28 @@ def get_transaction(db: Session, tx_id: int) -> Transaction | None:
 def create_transaction(db: Session, data: TransactionCreate) -> Transaction:
     # Extension point: deduplication check on external_id can be inserted here.
 
+    category = data.category
+    subcategory = data.subcategory
+    confidence: float | None = None
+    desc: str = ""
+
+    settings = get_settings()
+    if category is None and settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
+        classifier = get_classifier()
+        tree = build_category_tree(category_service.list_categories(db))
+        seen: set[str] = set()
+        parts: list[str] = []
+        for p in [data.merchant_normalized, data.description]:
+            if p and p not in seen:
+                seen.add(p)
+                parts.append(p)
+        desc = " ".join(parts)
+        if desc:
+            result = classifier.classify(desc, tree)
+            category = result["category"]
+            subcategory = result["subcategory"]
+            confidence = result["confidence"]
+
     transaction = Transaction(
         import_id=data.import_id,
         source_type=data.source_type,
@@ -84,14 +120,27 @@ def create_transaction(db: Session, data: TransactionCreate) -> Transaction:
         merchant_raw=data.merchant_raw,
         merchant_normalized=data.merchant_normalized,
         description=data.description,
-        category=data.category,
-        subcategory=data.subcategory,
+        category=category,
+        subcategory=subcategory,
+        classification_confidence=confidence,
         notes=data.notes,
         is_deleted=False,
     )
     db.add(transaction)
     db.commit()
     db.refresh(transaction)
+
+    if confidence is not None:
+        db.add(ClassificationLog(
+            description=desc,
+            category=category,
+            subcategory=subcategory,
+            confidence=confidence,
+            model=get_classifier()._model,
+            transaction_id=transaction.id,
+        ))
+        db.commit()
+
     return transaction
 
 

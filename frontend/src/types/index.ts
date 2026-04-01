@@ -29,6 +29,7 @@ export interface Transaction {
   description: string | null;
   category: string | null;
   subcategory: string | null;
+  classification_confidence: number | null;
   notes: string | null;
   is_deleted: boolean;
   created_at: string;
@@ -61,6 +62,7 @@ export interface TransactionFilters {
   search?: string;
   category?: string;
   source_type?: string;
+  needs_review?: boolean;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
   page?: number;

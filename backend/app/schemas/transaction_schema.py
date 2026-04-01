@@ -53,6 +53,7 @@ class TransactionRead(BaseModel):
     description: str | None
     category: str | None
     subcategory: str | None
+    classification_confidence: float | None
     notes: str | None
     is_deleted: bool
     created_at: datetime

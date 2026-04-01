@@ -3,10 +3,15 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
+from app.models.classification_log_model import ClassificationLog
 from app.models.import_model import Import
 from app.models.import_row_model import ImportRow
 from app.models.transaction_model import Transaction
 from app.parsers import registry
+from app.services import category_service
+from app.services.classification import get_classifier
+from app.services.classification.category_tree import build_category_tree
 
 
 def create_import(db: Session, source_name: str, file_name: str) -> Import:
@@ -67,6 +72,14 @@ def process_import(db: Session, import_id: int) -> Import:
     parser = registry.get(import_record.source_name)
     rows = db.query(ImportRow).filter(ImportRow.import_id == import_id).all()
 
+    # Build classifier and category tree once for the whole batch
+    classifier = None
+    category_tree: dict[str, list[str]] = {}
+    settings = get_settings()
+    if settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
+        classifier = get_classifier()
+        category_tree = build_category_tree(category_service.list_categories(db))
+
     parsed_count = 0
     failed_count = 0
 
@@ -75,8 +88,22 @@ def process_import(db: Session, import_id: int) -> Import:
         try:
             parsed = parser.parse_row(raw)
 
-            # Extension point: LLM categorization or rule-based categorization can be
-            # inserted here to auto-populate category/subcategory before saving.
+            category: str | None = None
+            subcategory: str | None = None
+            confidence: float | None = None
+            if classifier and category_tree:
+                seen: set[str] = set()
+                parts: list[str] = []
+                for p in [parsed.merchant_raw, parsed.description, parsed.notes]:
+                    if p and p not in seen:
+                        seen.add(p)
+                        parts.append(p)
+                desc = " ".join(parts)
+                if desc:
+                    result = classifier.classify(desc, category_tree)
+                    category = result["category"]
+                    subcategory = result["subcategory"]
+                    confidence = result["confidence"]
 
             # Extension point: deduplication check on external_id can go here.
 
@@ -92,10 +119,23 @@ def process_import(db: Session, import_id: int) -> Import:
                 merchant_raw=parsed.merchant_raw,
                 merchant_normalized=parsed.merchant_raw,  # raw used as initial normalized value
                 description=parsed.description,
+                category=category,
+                subcategory=subcategory,
+                classification_confidence=confidence,
                 notes=parsed.notes,
                 is_deleted=False,
             )
             db.add(transaction)
+
+            if confidence is not None:
+                db.add(ClassificationLog(
+                    description=desc,
+                    category=category,
+                    subcategory=subcategory,
+                    confidence=confidence,
+                    model=classifier._model,
+                    # transaction_id is None here — ID not available until batch commit
+                ))
 
             row.parse_status = "success"
             parsed_count += 1

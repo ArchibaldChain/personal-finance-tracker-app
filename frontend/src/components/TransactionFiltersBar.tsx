@@ -37,6 +37,10 @@ export default function TransactionFiltersBar({
     onChange({ ...filters, source_type: e.target.value || undefined, page: 1 });
   };
 
+  const handleNeedsReview = () => {
+    onChange({ ...filters, needs_review: !filters.needs_review, page: 1 });
+  };
+
   return (
     <div style={styles.bar}>
       <input
@@ -59,6 +63,12 @@ export default function TransactionFiltersBar({
         <option value="manual">Manual</option>
         <option value="csv">CSV Import</option>
       </select>
+      <button
+        onClick={handleNeedsReview}
+        style={filters.needs_review ? styles.reviewBtnActive : styles.reviewBtn}
+      >
+        ⚠ Needs Review
+      </button>
       <button onClick={onAddClick} style={styles.addBtn}>
         + Add Transaction
       </button>
@@ -81,6 +91,28 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     outline: 'none',
     minWidth: 140,
+  },
+  reviewBtn: {
+    padding: '8px 14px',
+    background: '#fff',
+    color: '#92400e',
+    border: '1px solid #fbbf24',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+  reviewBtnActive: {
+    padding: '8px 14px',
+    background: '#fef3c7',
+    color: '#92400e',
+    border: '1px solid #f59e0b',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
   },
   addBtn: {
     marginLeft: 'auto',
