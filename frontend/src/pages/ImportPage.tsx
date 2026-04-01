@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { listImports } from '../api/imports';
+import { deleteImport, listImports } from '../api/imports';
 import ImportForm from '../components/ImportForm';
 import ImportHistoryTable from '../components/ImportHistoryTable';
 import type { Import } from '../types';
@@ -20,6 +20,16 @@ export default function ImportPage() {
     fetchImports();
   }, [fetchImports]);
 
+  const handleDelete = useCallback(async (id: number) => {
+    try {
+      await deleteImport(id);
+      setImports((prev) => prev.filter((imp) => imp.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete import.');
+    }
+  }, []);
+
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 20 }}>Import CSV</h1>
@@ -27,7 +37,7 @@ export default function ImportPage() {
       <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 32, marginBottom: 0 }}>
         Import History
       </h2>
-      <ImportHistoryTable imports={imports} />
+      <ImportHistoryTable imports={imports} onDelete={handleDelete} />
     </div>
   );
 }

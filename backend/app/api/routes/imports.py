@@ -55,6 +55,14 @@ def get_import(import_id: int, db: Session = Depends(get_db)) -> ImportRead:
     return ImportRead.model_validate(import_record)
 
 
+@router.delete("/{import_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_import(import_id: int, db: Session = Depends(get_db)) -> None:
+    try:
+        import_service.delete_import(db, import_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/{import_id}/process", response_model=ImportRead)
 def process_import(import_id: int, db: Session = Depends(get_db)) -> ImportRead:
     try:

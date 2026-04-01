@@ -25,3 +25,7 @@ export async function getImport(id: number): Promise<Import> {
   const resp = await client.get<Import>(`/imports/${id}`);
   return resp.data;
 }
+
+export async function deleteImport(id: number): Promise<void> {
+  await client.delete(`/imports/${id}`);
+}

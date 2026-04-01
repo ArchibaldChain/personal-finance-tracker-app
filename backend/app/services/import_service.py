@@ -113,6 +113,17 @@ def process_import(db: Session, import_id: int) -> Import:
     return import_record
 
 
+def delete_import(db: Session, import_id: int) -> None:
+    """Hard-delete an import and all its associated transactions and raw rows."""
+    import_record = db.query(Import).filter(Import.id == import_id).first()
+    if not import_record:
+        raise ValueError(f"Import {import_id} not found")
+    db.query(Transaction).filter(Transaction.import_id == import_id).delete()
+    db.query(ImportRow).filter(ImportRow.import_id == import_id).delete()
+    db.delete(import_record)
+    db.commit()
+
+
 def get_import(db: Session, import_id: int) -> Import | None:
     return db.query(Import).filter(Import.id == import_id).first()
 

@@ -47,7 +47,7 @@ Interactive docs: `http://localhost:8000/docs`
 cd frontend
 
 npm install
-npm run dev
+npm run dev -- --host
 ```
 
 The app will be available at `http://localhost:5173`.
