@@ -7,7 +7,7 @@ interface ImportFormProps {
 }
 
 export default function ImportForm({ onSuccess }: ImportFormProps) {
-  const [sources, setSources] = useState<string[]>([]);
+  const [sources, setSources] = useState<{ key: string; display_name: string }[]>([]);
   const [selectedSource, setSelectedSource] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +17,7 @@ export default function ImportForm({ onSuccess }: ImportFormProps) {
     listSources()
       .then((s) => {
         setSources(s);
-        if (s.length > 0) setSelectedSource(s[0]);
+        if (s.length > 0) setSelectedSource(s[0].key);
       })
       .catch(console.error);
   }, []);
@@ -66,8 +66,8 @@ export default function ImportForm({ onSuccess }: ImportFormProps) {
           required
         >
           {sources.map((s) => (
-            <option key={s} value={s}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+            <option key={s.key} value={s.key}>
+              {s.display_name}
             </option>
           ))}
         </select>

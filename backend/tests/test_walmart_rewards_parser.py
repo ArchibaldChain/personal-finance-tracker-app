@@ -125,7 +125,7 @@ class TestWalmartRewardsParser:
         assert isinstance(parser, WalmartRewardsParser)
 
     def test_registry_list_includes_walmart(self):
-        assert "walmart_rewards" in registry.list_sources()
+        assert any(s["key"] == "walmart_rewards" for s in registry.list_sources())
 
 
 class TestWalmartRewardsParserCsv:

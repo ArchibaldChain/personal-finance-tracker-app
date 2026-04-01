@@ -83,3 +83,8 @@ export interface Category {
 export interface CategoryListResponse {
   categories: Category[];
 }
+
+export interface Source {
+  key: string;
+  display_name: string;
+}

@@ -7,6 +7,7 @@ interface TransactionTableProps {
   onRowClick: (tx: Transaction) => void;
   filters: TransactionFilters;
   onSort: (field: string) => void;
+  sourcesMap: Record<string, string>;
 }
 
 const COLUMNS: { key: string; label: string; sortable: boolean }[] = [
@@ -31,6 +32,7 @@ export default function TransactionTable({
   onRowClick,
   filters,
   onSort,
+  sourcesMap,
 }: TransactionTableProps) {
   const SortIndicator = ({ field }: { field: string }) => {
     if (filters.sort_by !== field) return <span style={{ color: '#9ca3af' }}> ↕</span>;
@@ -106,7 +108,9 @@ export default function TransactionTable({
                 </td>
                 <td style={styles.td}>
                   <span style={tx.source_type === 'csv' ? styles.csvBadge : styles.manualBadge}>
-                    {tx.source_type === 'csv' ? 'CSV' : 'Manual'}
+                    {tx.source_type === 'manual'
+                      ? 'Manual'
+                      : (tx.source_name && sourcesMap[tx.source_name]) ?? tx.source_name ?? 'CSV'}
                   </span>
                 </td>
                 <td style={{ ...styles.td, color: '#6b7280', maxWidth: 240 }}>

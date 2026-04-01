@@ -8,16 +8,19 @@ class ParserRegistry:
     """Registry mapping source names to parser classes.
 
     Usage:
-        registry.register("chase", ChaseParser)
+        registry.register("chase", ChaseParser, display_name="Chase")
         parser = registry.get("chase")
-        sources = registry.list_sources()
+        sources = registry.list_sources()  # [{"key": "chase", "display_name": "Chase"}, ...]
     """
 
     def __init__(self) -> None:
         self._registry: dict[str, type["BaseParser"]] = {}
+        self._display_names: dict[str, str] = {}
 
-    def register(self, name: str, parser_class: type["BaseParser"]) -> None:
-        self._registry[name.lower()] = parser_class
+    def register(self, name: str, parser_class: type["BaseParser"], display_name: str = "") -> None:
+        key = name.lower()
+        self._registry[key] = parser_class
+        self._display_names[key] = display_name or name
 
     def get(self, name: str) -> "BaseParser":
         """Return an instance of the parser for the given source name.
@@ -32,8 +35,11 @@ class ParserRegistry:
             )
         return self._registry[key]()
 
-    def list_sources(self) -> list[str]:
-        return sorted(self._registry.keys())
+    def list_sources(self) -> list[dict[str, str]]:
+        return [
+            {"key": key, "display_name": self._display_names[key]}
+            for key in sorted(self._registry.keys())
+        ]
 
 
 # Module-level singleton — import this everywhere

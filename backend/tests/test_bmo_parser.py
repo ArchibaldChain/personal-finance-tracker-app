@@ -89,10 +89,10 @@ class TestBMOParser:
         assert result.posted_date is None
 
     def test_registry_registered(self):
-        assert isinstance(registry.get("bmo"), BMOParser)
+        assert isinstance(registry.get("bmo_credit_card"), BMOParser)
 
     def test_registry_list_includes_bmo(self):
-        assert "bmo" in registry.list_sources()
+        assert any(s["key"] == "bmo_credit_card" for s in registry.list_sources())
 
 
 class TestBMOParserCsv:

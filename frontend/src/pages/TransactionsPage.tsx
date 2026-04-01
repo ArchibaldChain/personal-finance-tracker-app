@@ -6,6 +6,7 @@ import Pagination from '../components/Pagination';
 import TransactionFiltersBar from '../components/TransactionFiltersBar';
 import TransactionTable from '../components/TransactionTable';
 import { useCategories } from '../hooks/useCategories';
+import { useSources } from '../hooks/useSources';
 import type { Transaction, TransactionFilters, TransactionListResponse } from '../types';
 
 const DEFAULT_FILTERS: TransactionFilters = {
@@ -17,6 +18,8 @@ const DEFAULT_FILTERS: TransactionFilters = {
 
 export default function TransactionsPage() {
   const categories = useCategories();
+  const sources = useSources();
+  const sourcesMap = Object.fromEntries(sources.map((s) => [s.key, s.display_name]));
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_FILTERS);
   const [data, setData] = useState<TransactionListResponse>({ items: [], total: 0, page: 1, page_size: 50 });
   const [isLoading, setIsLoading] = useState(false);
@@ -75,6 +78,7 @@ export default function TransactionsPage() {
         onRowClick={setSelectedTx}
         filters={filters}
         onSort={handleSort}
+        sourcesMap={sourcesMap}
       />
 
       <Pagination

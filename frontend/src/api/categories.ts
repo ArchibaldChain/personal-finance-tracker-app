@@ -1,4 +1,4 @@
-import type { CategoryListResponse } from '../types';
+import type { CategoryListResponse, Source } from '../types';
 import client from './client';
 
 export async function listCategories(): Promise<CategoryListResponse> {
@@ -6,7 +6,7 @@ export async function listCategories(): Promise<CategoryListResponse> {
   return resp.data;
 }
 
-export async function listSources(): Promise<string[]> {
-  const resp = await client.get<{ sources: string[] }>('/sources');
+export async function listSources(): Promise<Source[]> {
+  const resp = await client.get<{ sources: Source[] }>('/sources');
   return resp.data.sources;
 }

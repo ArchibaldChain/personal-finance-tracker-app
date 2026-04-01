@@ -162,12 +162,12 @@ class TestRegistry:
             registry.get("nonexistent_bank")
 
     def test_list_sources_includes_both(self):
-        sources = registry.list_sources()
-        assert "chase" in sources
-        assert "bofa" in sources
+        keys = [s["key"] for s in registry.list_sources()]
+        assert "chase" in keys
+        assert "bofa" in keys
 
     def test_custom_registry_is_independent(self):
         custom = ParserRegistry()
         custom.register("test", ChaseParser)
-        assert "test" in custom.list_sources()
-        assert "test" not in registry.list_sources()
+        assert any(s["key"] == "test" for s in custom.list_sources())
+        assert all(s["key"] != "test" for s in registry.list_sources())
