@@ -72,11 +72,13 @@ export interface TransactionFilters {
 export interface Subcategory {
   id: number;
   name: string;
+  icon: string | null;
 }
 
 export interface Category {
   id: number;
   name: string;
+  icon: string | null;
   subcategories: Subcategory[];
 }
 

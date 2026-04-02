@@ -12,6 +12,7 @@ class Subcategory(Base):
         Integer, ForeignKey("categories.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    icon: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     category: Mapped["Category"] = relationship("Category", back_populates="subcategories")
 
@@ -23,6 +24,7 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    icon: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     subcategories: Mapped[list[Subcategory]] = relationship(
         "Subcategory", back_populates="category", cascade="all, delete-orphan"

@@ -6,6 +6,17 @@ class SubcategoryRead(BaseModel):
 
     id: int
     name: str
+    icon: str | None
+
+
+class SubcategoryCreate(BaseModel):
+    name: str
+    icon: str | None = None
+
+
+class SubcategoryUpdate(BaseModel):
+    name: str | None = None
+    icon: str | None = None
 
 
 class CategoryRead(BaseModel):
@@ -13,7 +24,18 @@ class CategoryRead(BaseModel):
 
     id: int
     name: str
+    icon: str | None
     subcategories: list[SubcategoryRead]
+
+
+class CategoryCreate(BaseModel):
+    name: str
+    icon: str | None = None
+
+
+class CategoryUpdate(BaseModel):
+    name: str | None = None
+    icon: str | None = None
 
 
 class CategoryListResponse(BaseModel):

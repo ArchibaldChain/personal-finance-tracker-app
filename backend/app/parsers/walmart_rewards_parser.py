@@ -98,8 +98,6 @@ class WalmartRewardsParser(BaseParser):
             merchant_name,
             merchant_category,
             self._get(r, "merchant city"),
-            self._get(r, "merchant state/province", "merchant state or province"),
-            self._get(r, "merchant country"),
         ]
         description = ", ".join(p for p in parts if p) or None
 
