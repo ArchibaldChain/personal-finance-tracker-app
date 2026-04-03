@@ -38,7 +38,7 @@ const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0,0,0,0.45)',
+    background: 'rgba(45, 33, 22, 0.5)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -47,23 +47,25 @@ const styles: Record<string, React.CSSProperties> = {
   modal: {
     background: '#fff',
     borderRadius: 8,
+    border: '1px solid #e8e4de',
     width: '100%',
-    maxWidth: 560,
+    maxWidth: 480,
     maxHeight: '90vh',
     overflow: 'auto',
-    boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+    boxShadow: '0 8px 32px rgba(45,33,22,0.12)',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '16px 20px',
-    borderBottom: '1px solid #e5e7eb',
+    borderBottom: '1px solid #e8e4de',
   },
   title: {
     margin: 0,
     fontSize: 18,
     fontWeight: 600,
+    color: '#2d2116',
   },
   closeBtn: {
     background: 'none',
@@ -71,7 +73,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 24,
     cursor: 'pointer',
     lineHeight: 1,
-    color: '#6b7280',
+    color: '#6b6560',
   },
   body: {
     padding: '20px',

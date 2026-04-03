@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Category, TransactionFilters } from '../types';
+import MonthPicker, { MonthValue } from './MonthPicker';
 
 interface TransactionFiltersBarProps {
   filters: TransactionFilters;
   onChange: (filters: TransactionFilters) => void;
   categories: Category[];
   onAddClick: () => void;
+  month: MonthValue | null;
+  onMonthChange: (v: MonthValue | null) => void;
 }
 
 export default function TransactionFiltersBar({
@@ -13,6 +16,8 @@ export default function TransactionFiltersBar({
   onChange,
   categories,
   onAddClick,
+  month,
+  onMonthChange,
 }: TransactionFiltersBarProps) {
   const [searchInput, setSearchInput] = useState(filters.search ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +48,7 @@ export default function TransactionFiltersBar({
 
   return (
     <div style={styles.bar}>
+      <MonthPicker value={month} onChange={onMonthChange} clearable />
       <input
         type="search"
         placeholder="Search merchant, description…"
@@ -66,8 +72,9 @@ export default function TransactionFiltersBar({
       <button
         onClick={handleNeedsReview}
         style={filters.needs_review ? styles.reviewBtnActive : styles.reviewBtn}
+        title="Needs Review"
       >
-        ⚠ Needs Review
+        ⚠
       </button>
       <button onClick={onAddClick} style={styles.addBtn}>
         + Add Transaction
@@ -86,18 +93,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   input: {
     padding: '8px 10px',
-    border: '1px solid #d1d5db',
-    borderRadius: 4,
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
     fontSize: 14,
     outline: 'none',
     minWidth: 140,
+    color: '#2d2116',
+    background: '#fff',
   },
   reviewBtn: {
     padding: '8px 14px',
     background: '#fff',
     color: '#92400e',
-    border: '1px solid #fbbf24',
-    borderRadius: 4,
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
     cursor: 'pointer',
     fontSize: 14,
     fontWeight: 500,
@@ -105,10 +114,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   reviewBtnActive: {
     padding: '8px 14px',
-    background: '#fef3c7',
+    background: '#fef9c3',
     color: '#92400e',
-    border: '1px solid #f59e0b',
-    borderRadius: 4,
+    border: '1px solid #d97706',
+    borderRadius: 6,
     cursor: 'pointer',
     fontSize: 14,
     fontWeight: 600,
@@ -117,10 +126,10 @@ const styles: Record<string, React.CSSProperties> = {
   addBtn: {
     marginLeft: 'auto',
     padding: '8px 16px',
-    background: '#2563eb',
+    background: '#c9a84c',
     color: '#fff',
     border: 'none',
-    borderRadius: 4,
+    borderRadius: 6,
     cursor: 'pointer',
     fontSize: 14,
     fontWeight: 500,

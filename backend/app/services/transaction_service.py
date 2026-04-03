@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -33,6 +33,8 @@ def list_transactions(
     sort_dir: str = "desc",
     page: int = 1,
     page_size: int = 50,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> tuple[list[Transaction], int]:
     query = db.query(Transaction).filter(Transaction.is_deleted == False)  # noqa: E712
 
@@ -58,6 +60,11 @@ def list_transactions(
             Transaction.classification_confidence < LOW_CONFIDENCE_THRESHOLD,
         )
 
+    if date_from:
+        query = query.filter(Transaction.transaction_date >= date_from)
+    if date_to:
+        query = query.filter(Transaction.transaction_date <= date_to)
+
     # Get total count before pagination
     total = query.with_entities(func.count(Transaction.id)).scalar() or 0
 
@@ -73,6 +80,52 @@ def list_transactions(
     items = query.offset(offset).limit(page_size).all()
 
     return items, total
+
+
+def get_transaction_summary(
+    db: Session,
+    search: str | None = None,
+    category: str | None = None,
+    source_type: str | None = None,
+    needs_review: bool = False,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict:
+    query = db.query(Transaction).filter(Transaction.is_deleted == False)  # noqa: E712
+
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                Transaction.merchant_normalized.ilike(pattern),
+                Transaction.description.ilike(pattern),
+                Transaction.notes.ilike(pattern),
+            )
+        )
+    if category:
+        query = query.filter(Transaction.category == category)
+    if source_type:
+        query = query.filter(Transaction.source_type == source_type)
+    if needs_review:
+        query = query.filter(
+            Transaction.classification_confidence.isnot(None),
+            Transaction.classification_confidence < LOW_CONFIDENCE_THRESHOLD,
+        )
+    if date_from:
+        query = query.filter(Transaction.transaction_date >= date_from)
+    if date_to:
+        query = query.filter(Transaction.transaction_date <= date_to)
+
+    expense_query = query.filter(Transaction.amount < 0)
+    total_count = query.with_entities(func.count(Transaction.id)).scalar() or 0
+    total_spent = expense_query.with_entities(func.sum(func.abs(Transaction.amount))).scalar() or 0
+    largest = expense_query.with_entities(func.max(func.abs(Transaction.amount))).scalar() or 0
+
+    return {
+        "total_spent": float(total_spent),
+        "transaction_count": int(total_count),
+        "largest_expense": float(largest),
+    }
 
 
 def get_transaction(db: Session, tx_id: int) -> Transaction | None:
@@ -153,6 +206,10 @@ def update_transaction(db: Session, tx_id: int, data: TransactionUpdate) -> Tran
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(transaction, field, value)
+
+    # If category was manually set, clear the LLM confidence so the ⚠ indicator disappears
+    if 'category' in update_data:
+        transaction.classification_confidence = None
 
     transaction.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()

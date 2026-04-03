@@ -6,25 +6,33 @@ interface ImportHistoryTableProps {
   onDelete: (id: number) => void;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  processing: 'Processing',
+  processed: 'Success',
+  processed_with_errors: 'Partial',
+  failed: 'Failed',
+};
+
 const STATUS_STYLES: Record<string, React.CSSProperties> = {
-  pending: { background: '#f3f4f6', color: '#374151' },
-  processing: { background: '#fef9c3', color: '#854d0e' },
-  processed: { background: '#f0fdf4', color: '#15803d' },
-  processed_with_errors: { background: '#fff7ed', color: '#c2410c' },
-  failed: { background: '#fee2e2', color: '#991b1b' },
+  pending: { background: '#f5f0e8', color: '#6b6560' },
+  processing: { background: '#fef9c3', color: '#92400e' },
+  processed: { background: '#f0fdf4', color: '#5a8a6a' },
+  processed_with_errors: { background: '#fef9c3', color: '#92400e' },
+  failed: { background: '#fee2e2', color: '#c0392b' },
 };
 
 export default function ImportHistoryTable({ imports, onDelete }: ImportHistoryTableProps) {
   if (imports.length === 0) {
-    return <p style={{ color: '#6b7280', marginTop: 24 }}>No imports yet.</p>;
+    return <p style={{ color: '#6b6560', marginTop: 24 }}>No imports yet.</p>;
   }
 
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 24 }}>
+    <div style={styles.cardWrapper}>
       <table style={styles.table}>
         <thead>
           <tr>
-            {['File', 'Source', 'Uploaded', 'Status', 'Rows', 'Failed', ''].map((h) => (
+            {['Date Uploaded', 'Source', 'File Name', 'Status', 'Total Rows', 'Parsed', 'Failed', 'Actions'].map((h) => (
               <th key={h} style={styles.th}>
                 {h}
               </th>
@@ -34,16 +42,17 @@ export default function ImportHistoryTable({ imports, onDelete }: ImportHistoryT
         <tbody>
           {imports.map((imp) => (
             <tr key={imp.id}>
-              <td style={styles.td}>{imp.file_name}</td>
-              <td style={styles.td}>{imp.source_name}</td>
               <td style={styles.td}>{new Date(imp.uploaded_at).toLocaleString()}</td>
+              <td style={styles.td}>{imp.source_name}</td>
+              <td style={styles.td}>{imp.file_name}</td>
               <td style={styles.td}>
                 <span style={{ ...styles.badge, ...(STATUS_STYLES[imp.status] ?? {}) }}>
-                  {imp.status}
+                  {STATUS_LABELS[imp.status] ?? imp.status}
                 </span>
               </td>
-              <td style={styles.td}>{imp.parsed_rows ?? '—'}</td>
-              <td style={{ ...styles.td, color: (imp.failed_rows ?? 0) > 0 ? '#dc2626' : undefined }}>
+              <td style={styles.td}>{imp.total_rows ?? '—'}</td>
+              <td style={styles.td}>{imp.parsed_rows}</td>
+              <td style={{ ...styles.td, color: (imp.failed_rows ?? 0) > 0 ? '#c0392b' : undefined }}>
                 {imp.failed_rows ?? 0}
               </td>
               <td style={styles.td}>
@@ -74,23 +83,31 @@ export default function ImportHistoryTable({ imports, onDelete }: ImportHistoryT
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  cardWrapper: {
+    overflowX: 'auto',
+    background: '#fff',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+  },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 },
   th: {
-    padding: '10px 12px',
+    padding: '10px 16px',
     textAlign: 'left',
-    background: '#f9fafb',
-    borderBottom: '1px solid #e5e7eb',
+    background: '#faf8f4',
+    borderBottom: '1px solid #e8e4de',
     fontWeight: 600,
     whiteSpace: 'nowrap',
+    color: '#6b6560',
+    fontSize: 12,
   },
-  td: { padding: '10px 12px', borderBottom: '1px solid #f3f4f6' },
-  badge: { padding: '2px 8px', borderRadius: 12, fontSize: 12 },
+  td: { padding: '10px 16px', borderBottom: '1px solid #f3f0eb', color: '#2d2116' },
+  badge: { padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 500 },
   deleteBtn: {
     padding: '4px 6px',
     border: 'none',
     borderRadius: 4,
     background: 'transparent',
-    color: '#dc2626',
+    color: '#c0392b',
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',

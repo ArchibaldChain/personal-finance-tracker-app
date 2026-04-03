@@ -67,6 +67,8 @@ export interface TransactionFilters {
   sort_dir?: 'asc' | 'desc';
   page?: number;
   page_size?: number;
+  date_from?: string;
+  date_to?: string;
 }
 
 export interface Subcategory {

@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
-import { listTransactions } from '../api/transactions';
+import React, { useCallback, useEffect, useState } from 'react';
+import { getTransactionSummary, listTransactions, updateTransaction } from '../api/transactions';
+import type { TransactionSummary } from '../api/transactions';
 import AddTransactionModal from '../components/AddTransactionModal';
 import EditTransactionModal from '../components/EditTransactionModal';
+import { MonthValue } from '../components/MonthPicker';
 import Pagination from '../components/Pagination';
 import TransactionFiltersBar from '../components/TransactionFiltersBar';
 import TransactionTable from '../components/TransactionTable';
@@ -16,27 +18,54 @@ const DEFAULT_FILTERS: TransactionFilters = {
   page_size: 50,
 };
 
+function monthToDateRange(m: MonthValue) {
+  const from = `${m.year}-${String(m.month).padStart(2, '0')}-01`;
+  const lastDay = new Date(m.year, m.month, 0).getDate();
+  const to = `${m.year}-${String(m.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { from, to };
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+}
+
 export default function TransactionsPage() {
   const categories = useCategories();
   const sources = useSources();
   const sourcesMap = Object.fromEntries(sources.map((s) => [s.key, s.display_name]));
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_FILTERS);
+  const [month, setMonth] = useState<MonthValue | null>(null);
   const [data, setData] = useState<TransactionListResponse>({ items: [], total: 0, page: 1, page_size: 50 });
   const [isLoading, setIsLoading] = useState(false);
+  const [summary, setSummary] = useState<TransactionSummary>({ total_spent: 0, transaction_count: 0, largest_expense: 0 });
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
+
+  // Summary uses only filter fields relevant to aggregation (no page/sort)
+  const summaryFilters = (f: TransactionFilters): TransactionFilters => ({
+    search: f.search,
+    category: f.category,
+    source_type: f.source_type,
+    needs_review: f.needs_review,
+    date_from: f.date_from,
+    date_to: f.date_to,
+  });
 
   const fetchTransactions = useCallback(async (f: TransactionFilters) => {
     setIsLoading(true);
     try {
-      const result = await listTransactions(f);
+      const [result, sum] = await Promise.all([
+        listTransactions(f),
+        getTransactionSummary(summaryFilters(f)),
+      ]);
       setData(result);
+      setSummary(sum);
     } catch (err) {
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchTransactions(filters);
@@ -44,6 +73,16 @@ export default function TransactionsPage() {
 
   const handleFiltersChange = (newFilters: TransactionFilters) => {
     setFilters(newFilters);
+  };
+
+  const handleMonthChange = (m: MonthValue | null) => {
+    setMonth(m);
+    if (m) {
+      const range = monthToDateRange(m);
+      setFilters((f) => ({ ...f, date_from: range.from, date_to: range.to, page: 1 }));
+    } else {
+      setFilters((f) => { const next = { ...f, page: 1 }; delete next.date_from; delete next.date_to; return next; });
+    }
   };
 
   const handleSort = (field: string) => {
@@ -63,13 +102,38 @@ export default function TransactionsPage() {
     fetchTransactions(filters);
   };
 
+  const handleCategoryChange = useCallback(async (txId: number, category: string | null, subcategory: string | null) => {
+    await updateTransaction(txId, { category, subcategory });
+    fetchTransactions(filters);
+  }, [filters, fetchTransactions]);
+
   return (
     <div>
+      {/* Summary Card */}
+      <div style={styles.summaryCard}>
+        <div style={styles.summaryItem}>
+          <span style={styles.summaryLabel}>Total Spent</span>
+          <span style={styles.summaryValue}>{formatCurrency(summary.total_spent)}</span>
+        </div>
+        <div style={styles.summaryDivider} />
+        <div style={styles.summaryItem}>
+          <span style={styles.summaryLabel}>Transactions</span>
+          <span style={styles.summaryValue}>{summary.transaction_count.toLocaleString()}</span>
+        </div>
+        <div style={styles.summaryDivider} />
+        <div style={styles.summaryItem}>
+          <span style={styles.summaryLabel}>Largest Expense</span>
+          <span style={styles.summaryValue}>{formatCurrency(summary.largest_expense)}</span>
+        </div>
+      </div>
+
       <TransactionFiltersBar
         filters={filters}
         onChange={handleFiltersChange}
         categories={categories}
         onAddClick={() => setIsAddOpen(true)}
+        month={month}
+        onMonthChange={handleMonthChange}
       />
 
       <TransactionTable
@@ -79,6 +143,8 @@ export default function TransactionsPage() {
         filters={filters}
         onSort={handleSort}
         sourcesMap={sourcesMap}
+        categories={categories}
+        onCategoryChange={handleCategoryChange}
       />
 
       <Pagination
@@ -104,3 +170,42 @@ export default function TransactionsPage() {
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  summaryCard: {
+    display: 'flex',
+    gap: 0,
+    background: '#fff',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    padding: '16px 24px',
+    marginBottom: 20,
+    boxShadow: '0 1px 4px rgba(45,33,22,0.06)',
+    alignItems: 'center',
+  },
+  summaryItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#6b6560',
+    fontWeight: 500,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: '#c9a84c',
+  },
+  summaryDivider: {
+    width: 1,
+    height: 40,
+    background: '#e8e4de',
+    margin: '0 16px',
+  },
+};

@@ -32,12 +32,13 @@ export default function ImportPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 20 }}>Import CSV</h1>
       <ImportForm onSuccess={fetchImports} />
-      <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 32, marginBottom: 0 }}>
-        Import History
-      </h2>
-      <ImportHistoryTable imports={imports} onDelete={handleDelete} />
+      <div style={{ marginTop: 32 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#2d2116', marginBottom: 12, marginTop: 0 }}>
+          Import History
+        </h2>
+        <ImportHistoryTable imports={imports} onDelete={handleDelete} />
+      </div>
     </div>
   );
 }

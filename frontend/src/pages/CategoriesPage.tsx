@@ -19,13 +19,7 @@ const PRESET_ICONS = [
   '🎓','🔌','💰','🧴','👕','👟','👜','🏦','📈','💳',
 ];
 
-function IconPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (icon: string) => void;
-}) {
+function IconPicker({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
   return (
     <div style={styles.iconGrid}>
       {PRESET_ICONS.map((icon) => (
@@ -35,8 +29,8 @@ function IconPicker({
           onClick={() => onChange(icon)}
           style={{
             ...styles.iconBtn,
-            background: value === icon ? '#dbeafe' : '#f9fafb',
-            border: value === icon ? '2px solid #2563eb' : '2px solid transparent',
+            background: value === icon ? '#fef9ec' : '#faf8f4',
+            border: value === icon ? '2px solid #c9a84c' : '2px solid transparent',
           }}
           title={icon}
         >
@@ -47,15 +41,33 @@ function IconPicker({
   );
 }
 
-function SubcategoryRow({
-  sub,
-  onUpdate,
-  onDelete,
-}: {
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+interface SubcategoryRowProps {
   sub: Subcategory;
   onUpdate: (id: number, name: string, icon: string) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
-}) {
+}
+
+function SubcategoryRow({ sub, onUpdate, onDelete }: SubcategoryRowProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(sub.name);
   const [icon, setIcon] = useState(sub.icon ?? '');
@@ -67,14 +79,15 @@ function SubcategoryRow({
 
   if (editing) {
     return (
-      <div style={styles.subEditRow}>
+      <div style={styles.subEditBlock}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           style={styles.inlineInput}
+          autoFocus
         />
         <IconPicker value={icon} onChange={setIcon} />
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
           <button type="button" onClick={handleSave} style={styles.saveBtn}>Save</button>
           <button type="button" onClick={() => setEditing(false)} style={styles.cancelBtn}>Cancel</button>
         </div>
@@ -84,33 +97,24 @@ function SubcategoryRow({
 
   return (
     <div style={styles.subRow}>
-      <span style={styles.subIcon}>{sub.icon}</span>
+      <span style={styles.subIconBadge}>{sub.icon || '•'}</span>
       <span style={styles.subName}>{sub.name}</span>
-      <button type="button" onClick={() => setEditing(true)} style={styles.editIconBtn} title="Edit">✏️</button>
-      <button
-        type="button"
-        onClick={() => onDelete(sub.id)}
-        style={styles.deleteIconBtn}
-        title="Delete subcategory"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-          <path d="M10 11v6M14 11v6" />
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-        </svg>
+      <button type="button" onClick={() => setEditing(true)} style={styles.iconActionBtn} title="Edit">
+        <PencilIcon />
+      </button>
+      <button type="button" onClick={() => onDelete(sub.id)} style={{ ...styles.iconActionBtn, color: '#c0392b' }} title="Delete">
+        <TrashIcon />
       </button>
     </div>
   );
 }
 
-function AddSubcategoryForm({
-  categoryId,
-  onAdd,
-}: {
+interface AddSubcategoryFormProps {
   categoryId: number;
   onAdd: (categoryId: number, name: string, icon: string) => Promise<void>;
-}) {
+}
+
+function AddSubcategoryForm({ categoryId, onAdd }: AddSubcategoryFormProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('');
@@ -127,7 +131,7 @@ function AddSubcategoryForm({
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} style={styles.addSubBtn}>
-        + Add subcategory
+        + Add Subcategory
       </button>
     );
   }
@@ -142,7 +146,7 @@ function AddSubcategoryForm({
         autoFocus
       />
       <IconPicker value={icon} onChange={setIcon} />
-      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
         <button type="submit" style={styles.saveBtn}>Add</button>
         <button type="button" onClick={() => setOpen(false)} style={styles.cancelBtn}>Cancel</button>
       </div>
@@ -150,142 +154,22 @@ function AddSubcategoryForm({
   );
 }
 
-function CategoryCard({
-  category,
-  onUpdateCategory,
-  onDeleteCategory,
-  onUpdateSubcategory,
-  onDeleteSubcategory,
-  onAddSubcategory,
-}: {
-  category: Category;
-  onUpdateCategory: (id: number, name: string, icon: string) => Promise<void>;
-  onDeleteCategory: (id: number) => Promise<void>;
-  onUpdateSubcategory: (id: number, name: string, icon: string) => Promise<void>;
-  onDeleteSubcategory: (id: number) => Promise<void>;
-  onAddSubcategory: (categoryId: number, name: string, icon: string) => Promise<void>;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [editingHeader, setEditingHeader] = useState(false);
-  const [name, setName] = useState(category.name);
-  const [icon, setIcon] = useState(category.icon ?? '');
-
-  async function handleSaveHeader() {
-    await onUpdateCategory(category.id, name, icon);
-    setEditingHeader(false);
-  }
-
-  return (
-    <div style={styles.card}>
-      {editingHeader ? (
-        <div style={styles.cardHeaderEdit}>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={styles.inlineInput}
-          />
-          <IconPicker value={icon} onChange={setIcon} />
-          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-            <button type="button" onClick={handleSaveHeader} style={styles.saveBtn}>Save</button>
-            <button type="button" onClick={() => setEditingHeader(false)} style={styles.cancelBtn}>Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <div style={styles.cardHeader}>
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            style={styles.cardHeaderBtn}
-          >
-            <span style={styles.catIcon}>{category.icon}</span>
-            <span style={styles.catName}>{category.name}</span>
-            <span style={styles.subCount}>{category.subcategories.length}</span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }}>
-              {expanded ? '▲' : '▼'}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditingHeader(true)}
-            style={styles.editIconBtn}
-            title="Edit category"
-          >✏️</button>
-          <button
-            type="button"
-            onClick={() => onDeleteCategory(category.id)}
-            style={styles.deleteIconBtn}
-            title="Delete category"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6M14 11v6" />
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {expanded && !editingHeader && (
-        <div style={styles.cardBody}>
-          {category.subcategories.map((sub) => (
-            <SubcategoryRow
-              key={sub.id}
-              sub={sub}
-              onUpdate={onUpdateSubcategory}
-              onDelete={onDeleteSubcategory}
-            />
-          ))}
-          <AddSubcategoryForm categoryId={category.id} onAdd={onAddSubcategory} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AddCategoryForm({ onAdd }: { onAdd: (name: string, icon: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState('');
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    await onAdd(name.trim(), icon);
-    setName('');
-    setIcon('');
-    setOpen(false);
-  }
-
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)} style={styles.addCatBtn}>
-        + Add category
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} style={styles.addCatForm}>
-      <h3 style={{ margin: 0, fontSize: 15 }}>New Category</h3>
-      <input
-        placeholder="Category name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        style={styles.inlineInput}
-        autoFocus
-      />
-      <IconPicker value={icon} onChange={setIcon} />
-      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-        <button type="submit" style={styles.saveBtn}>Create</button>
-        <button type="button" onClick={() => setOpen(false)} style={styles.cancelBtn}>Cancel</button>
-      </div>
-    </form>
-  );
-}
+// ---- Main Page ----
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+
+  // Right panel edit state
+  const [editName, setEditName] = useState('');
+  const [editIcon, setEditIcon] = useState('');
+
+  // New category form state
+  const [newName, setNewName] = useState('');
+  const [newIcon, setNewIcon] = useState('');
+
+  const selectedCategory = categories.find((c) => c.id === selectedId) ?? null;
 
   async function reload() {
     const resp = await listCategories();
@@ -294,19 +178,29 @@ export default function CategoriesPage() {
 
   useEffect(() => { reload().catch(console.error); }, []);
 
-  async function handleUpdateCategory(id: number, name: string, icon: string) {
-    await updateCategory(id, { name, icon });
+  // Sync edit fields when selection changes
+  useEffect(() => {
+    if (selectedCategory) {
+      setEditName(selectedCategory.name);
+      setEditIcon(selectedCategory.icon ?? '');
+    }
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSaveCategory() {
+    if (!selectedCategory) return;
+    await updateCategory(selectedCategory.id, { name: editName, icon: editIcon || null });
     await reload();
   }
 
   async function handleDeleteCategory(id: number) {
     if (!confirm('Delete this category and all its subcategories?')) return;
     await deleteCategory(id);
+    if (selectedId === id) setSelectedId(null);
     await reload();
   }
 
   async function handleUpdateSubcategory(id: number, name: string, icon: string) {
-    await updateSubcategory(id, { name, icon });
+    await updateSubcategory(id, { name, icon: icon || null });
     await reload();
   }
 
@@ -321,130 +215,360 @@ export default function CategoriesPage() {
     await reload();
   }
 
-  async function handleAddCategory(name: string, icon: string) {
-    await createCategory({ name, icon: icon || null });
+  async function handleCreateCategory(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    const created = await createCategory({ name: newName.trim(), icon: newIcon || null });
+    setNewName('');
+    setNewIcon('');
+    setIsAddingCategory(false);
     await reload();
+    setSelectedId(created.id);
   }
 
   return (
-    <div>
-      <div style={styles.pageHeader}>
-        <h1 style={styles.title}>Categories</h1>
-        <p style={styles.subtitle}>Manage your spending categories and subcategories.</p>
+    <div style={styles.layout}>
+      {/* Left Panel */}
+      <div style={styles.leftPanel}>
+        <div style={styles.leftScroll}>
+          {categories.map((cat) => (
+            <div
+              key={cat.id}
+              style={{
+                ...styles.catRow,
+                background: selectedId === cat.id ? '#fef9ec' : '#fff',
+              }}
+              onClick={() => { setSelectedId(cat.id); setIsAddingCategory(false); }}
+            >
+              <span style={styles.catIconBadge}>{cat.icon || '📦'}</span>
+              <div style={styles.catInfo}>
+                <span style={styles.catName}>{cat.name}</span>
+                <span style={styles.subCountPill}>{cat.subcategories.length} subcategories</span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setSelectedId(cat.id); setIsAddingCategory(false); }}
+                style={styles.iconActionBtn}
+                title="Edit"
+              >
+                <PencilIcon />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
+                style={{ ...styles.iconActionBtn, color: '#c0392b' }}
+                title="Delete"
+              >
+                <TrashIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => { setIsAddingCategory(true); setSelectedId(null); }}
+          style={styles.addCatBtn}
+        >
+          + Add Category
+        </button>
       </div>
 
-      <div style={styles.grid}>
-        {categories.map((cat) => (
-          <CategoryCard
-            key={cat.id}
-            category={cat}
-            onUpdateCategory={handleUpdateCategory}
-            onDeleteCategory={handleDeleteCategory}
-            onUpdateSubcategory={handleUpdateSubcategory}
-            onDeleteSubcategory={handleDeleteSubcategory}
-            onAddSubcategory={handleAddSubcategory}
-          />
-        ))}
-      </div>
+      {/* Right Panel */}
+      <div style={styles.rightPanel}>
+        {isAddingCategory ? (
+          <form onSubmit={handleCreateCategory} style={styles.detailContent}>
+            <h2 style={styles.detailHeading}>New Category</h2>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Category Icon</label>
+              <IconPicker value={newIcon} onChange={setNewIcon} />
+            </div>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Category Name</label>
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={styles.fieldInput}
+                placeholder="e.g. Food & Dining"
+                autoFocus
+                required
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" style={styles.saveChangesBtn}>Create Category</button>
+              <button type="button" onClick={() => setIsAddingCategory(false)} style={styles.cancelBtnLg}>Cancel</button>
+            </div>
+          </form>
+        ) : selectedCategory ? (
+          <div style={styles.detailContent}>
+            <h2 style={styles.detailHeading}>Category Details</h2>
 
-      <div style={{ marginTop: 20 }}>
-        <AddCategoryForm onAdd={handleAddCategory} />
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Category Icon</label>
+              <IconPicker value={editIcon} onChange={setEditIcon} />
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Category Name</label>
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                style={styles.fieldInput}
+              />
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Subcategories</label>
+              <div style={styles.subList}>
+                {selectedCategory.subcategories.map((sub) => (
+                  <SubcategoryRow
+                    key={sub.id}
+                    sub={sub}
+                    onUpdate={handleUpdateSubcategory}
+                    onDelete={handleDeleteSubcategory}
+                  />
+                ))}
+                <AddSubcategoryForm categoryId={selectedCategory.id} onAdd={handleAddSubcategory} />
+              </div>
+            </div>
+
+            <button type="button" onClick={handleSaveCategory} style={styles.saveChangesBtn}>
+              Save Changes
+            </button>
+          </div>
+        ) : (
+          <div style={styles.placeholder}>
+            <span style={styles.placeholderIcon}>📂</span>
+            <p style={styles.placeholderText}>Select a category to view and edit its details</p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  pageHeader: { marginBottom: 24 },
-  title: { margin: 0, fontSize: 22, fontWeight: 700, color: '#111827' },
-  subtitle: { margin: '4px 0 0', fontSize: 14, color: '#6b7280' },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-    gap: 14,
+  layout: {
+    display: 'flex',
+    gap: 20,
+    alignItems: 'flex-start',
+    minHeight: 500,
   },
-  card: {
+  leftPanel: {
+    width: 320,
+    flexShrink: 0,
     background: '#fff',
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    display: 'flex',
+    flexDirection: 'column',
     overflow: 'hidden',
   },
-  cardHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '12px 14px',
-  },
-  cardHeaderEdit: { padding: '12px 14px' },
-  cardHeaderBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
+  leftScroll: {
     flex: 1,
+    overflowY: 'auto',
+    maxHeight: 600,
+  },
+  catRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 14px',
+    cursor: 'pointer',
+    borderBottom: '1px solid #f3f0eb',
+    transition: 'background 0.1s',
+  },
+  catIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    background: '#f5f0e8',
+    display: 'flex' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 18,
+    flexShrink: 0,
+  },
+  catInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    minWidth: 0,
+  },
+  catName: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#2d2116',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  subCountPill: {
+    fontSize: 11,
+    color: '#6b6560',
+  },
+  iconActionBtn: {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: 0,
-    textAlign: 'left',
+    color: '#6b6560',
+    padding: '3px',
+    display: 'flex',
+    alignItems: 'center',
+    borderRadius: 4,
+    flexShrink: 0,
   },
-  catIcon: { fontSize: 20 },
-  catName: { fontSize: 14, fontWeight: 600, color: '#111827' },
-  subCount: {
-    fontSize: 11,
-    background: '#f3f4f6',
-    color: '#6b7280',
-    borderRadius: 10,
-    padding: '2px 7px',
-    fontWeight: 500,
+  addCatBtn: {
+    margin: 12,
+    padding: '10px',
+    background: '#c9a84c',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+    width: 'calc(100% - 24px)',
   },
-  cardBody: {
-    borderTop: '1px solid #f3f4f6',
-    padding: '10px 14px',
+  rightPanel: {
+    flex: 1,
+    background: '#fff',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    minHeight: 400,
+    display: 'flex',
+  },
+  detailContent: {
+    flex: 1,
+    padding: 24,
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 20,
+  },
+  detailHeading: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 700,
+    color: '#2d2116',
+    paddingBottom: 16,
+    borderBottom: '1px solid #e8e4de',
+  },
+  fieldGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: 500,
+    color: '#6b6560',
+  },
+  fieldInput: {
+    padding: '8px 12px',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    fontSize: 14,
+    color: '#2d2116',
+    background: '#fff',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+  },
+  subList: {
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    overflow: 'hidden',
+    background: '#faf8f4',
   },
   subRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    padding: '5px 0',
+    gap: 10,
+    padding: '10px 14px',
+    background: '#fff',
+    borderBottom: '1px solid #f3f0eb',
   },
-  subEditRow: { padding: '8px 0' },
-  subIcon: { fontSize: 16, minWidth: 22 },
-  subName: { fontSize: 13, color: '#374151', flex: 1 },
-  editIconBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: '2px 4px',
-    fontSize: 13,
-    opacity: 0.6,
+  subEditBlock: {
+    padding: '10px 14px',
+    background: '#fff',
+    borderBottom: '1px solid #f3f0eb',
   },
-  deleteIconBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#dc2626',
-    padding: '2px 4px',
-    display: 'flex',
-    alignItems: 'center',
-    opacity: 0.7,
-  },
-  inlineInput: {
-    padding: '6px 8px',
-    border: '1px solid #d1d5db',
+  subIconBadge: {
+    width: 28,
+    height: 28,
     borderRadius: 4,
+    background: '#f5f0e8',
+    display: 'flex' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 15,
+    flexShrink: 0,
+  },
+  subName: {
+    flex: 1,
     fontSize: 13,
+    color: '#2d2116',
+  },
+  addSubBtn: {
+    display: 'block',
     width: '100%',
-    boxSizing: 'border-box' as const,
-    marginBottom: 8,
+    padding: '10px 14px',
+    background: 'transparent',
+    border: 'none',
+    borderTop: '1px dashed #e8e4de',
+    color: '#6b6560',
+    fontSize: 13,
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  addSubForm: {
+    padding: '12px 14px',
+    background: '#fff',
+    borderTop: '1px solid #e8e4de',
+  },
+  saveChangesBtn: {
+    padding: '10px 20px',
+    background: '#c9a84c',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+    alignSelf: 'flex-start',
+  },
+  cancelBtnLg: {
+    padding: '10px 20px',
+    background: '#fff',
+    color: '#6b6560',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 14,
+  },
+  placeholder: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: 40,
+  },
+  placeholderIcon: {
+    fontSize: 40,
+    opacity: 0.4,
+  },
+  placeholderText: {
+    margin: 0,
+    fontSize: 14,
+    color: '#6b6560',
+    textAlign: 'center',
   },
   iconGrid: {
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: 4,
-    marginBottom: 4,
   },
   iconBtn: {
     fontSize: 18,
@@ -452,10 +576,22 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     cursor: 'pointer',
     lineHeight: 1,
+    transition: 'border-color 0.1s',
+  },
+  inlineInput: {
+    padding: '6px 8px',
+    border: '1px solid #e8e4de',
+    borderRadius: 4,
+    fontSize: 13,
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    marginBottom: 8,
+    color: '#2d2116',
+    outline: 'none',
   },
   saveBtn: {
     padding: '5px 12px',
-    background: '#2563eb',
+    background: '#c9a84c',
     color: '#fff',
     border: 'none',
     borderRadius: 4,
@@ -464,43 +600,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: '5px 12px',
-    background: '#f3f4f6',
-    color: '#374151',
+    background: '#f5f0e8',
+    color: '#6b6560',
     border: 'none',
     borderRadius: 4,
     cursor: 'pointer',
     fontSize: 13,
-  },
-  addSubBtn: {
-    background: 'none',
-    border: '1px dashed #d1d5db',
-    borderRadius: 4,
-    color: '#6b7280',
-    cursor: 'pointer',
-    fontSize: 13,
-    padding: '5px 10px',
-    marginTop: 4,
-    width: '100%',
-  },
-  addSubForm: { marginTop: 8 },
-  addCatBtn: {
-    padding: '9px 18px',
-    background: '#f0fdf4',
-    color: '#15803d',
-    border: '1px solid #bbf7d0',
-    borderRadius: 6,
-    cursor: 'pointer',
-    fontSize: 14,
-    fontWeight: 500,
-  },
-  addCatForm: {
-    background: '#fff',
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
-    padding: 16,
-    maxWidth: 360,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
   },
 };

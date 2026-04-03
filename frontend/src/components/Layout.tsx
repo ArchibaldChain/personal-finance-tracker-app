@@ -4,13 +4,13 @@ import logo from '../assets/logo.png';
 
 export default function Layout() {
   const linkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties => ({
-    padding: '8px 14px',
-    borderRadius: 4,
+    padding: '6px 14px',
+    borderRadius: 6,
     textDecoration: 'none',
     fontSize: 14,
     fontWeight: 500,
-    color: isActive ? '#2563eb' : '#374151',
-    background: isActive ? '#eff6ff' : 'transparent',
+    color: isActive ? '#c9a84c' : '#2d2116',
+    background: isActive ? '#f5f0e8' : 'transparent',
   });
 
   return (
@@ -19,6 +19,9 @@ export default function Layout() {
         <img src={logo} alt="Finance Tracker" style={styles.logo} />
         <span style={styles.brand}>Finance Tracker</span>
         <div style={styles.links}>
+          <NavLink to="/dashboard" style={linkStyle}>
+            Dashboard
+          </NavLink>
           <NavLink to="/transactions" style={linkStyle}>
             Transactions
           </NavLink>
@@ -38,20 +41,20 @@ export default function Layout() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  app: { minHeight: '100vh', background: '#f9fafb' },
+  app: { minHeight: '100vh', background: '#faf8f4' },
   nav: {
     display: 'flex',
     alignItems: 'center',
     gap: 24,
     padding: '12px 24px',
     background: '#fff',
-    borderBottom: '1px solid #e5e7eb',
+    borderBottom: '1px solid #e8e4de',
     position: 'sticky',
     top: 0,
     zIndex: 100,
   },
   logo: { height: 32, width: 'auto', display: 'block' },
-  brand: { fontWeight: 700, fontSize: 16, color: '#111827' },
-  links: { display: 'flex', gap: 4 },
+  brand: { fontWeight: 700, fontSize: 16, color: '#2d2116' },
+  links: { display: 'flex', gap: 4, marginLeft: 'auto' },
   main: { padding: '24px 32px', maxWidth: 1200, margin: '0 auto' },
 };
