@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const [txList, setTxList] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchData = useCallback(async (m: MonthValue) => {
@@ -74,6 +75,7 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchData(month);
     setActiveCat(null);
+    setSelectedDay(null);
   }, [month, fetchData]);
 
   const expenses = useMemo(() => txList.filter((tx) => tx.amount < 0), [txList]);
@@ -104,10 +106,16 @@ export default function DashboardPage() {
   }, [expenses]);
 
   const totalSpent = useMemo(() => expenses.reduce((s, tx) => s + Math.abs(tx.amount), 0), [expenses]);
+  const largestExpense = useMemo(() => expenses.reduce((max, tx) => Math.max(max, Math.abs(tx.amount)), 0), [expenses]);
 
   const activeCatTxs = useMemo(
     () => activeCat ? expenses.filter((tx) => (tx.category ?? 'Uncategorized') === activeCat) : [],
     [activeCat, expenses]
+  );
+
+  const dayTxs = useMemo(
+    () => selectedDay ? expenses.filter((tx) => tx.transaction_date === selectedDay) : [],
+    [selectedDay, expenses]
   );
 
   const monthLabel = new Date(month.year, month.month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -136,6 +144,24 @@ export default function DashboardPage() {
 
       {!isLoading && !fetchError && hasData && (
         <>
+          {/* Summary Card */}
+          <div style={styles.summaryCard}>
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Total Spent</span>
+              <span style={styles.summaryValue}>{formatCurrency(totalSpent)}</span>
+            </div>
+            <div style={styles.summaryDivider} />
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Transactions</span>
+              <span style={styles.summaryValue}>{txList.length.toLocaleString()}</span>
+            </div>
+            <div style={styles.summaryDivider} />
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Largest Expense</span>
+              <span style={styles.summaryValue}>{formatCurrency(largestExpense)}</span>
+            </div>
+          </div>
+
           <div style={styles.chartsRow}>
             {/* Bar Chart */}
             <div style={{ ...styles.card, flex: '1 1 55%', minWidth: 300 }}>
@@ -162,7 +188,18 @@ export default function DashboardPage() {
                     labelFormatter={(label) => `Day ${label}`}
                     contentStyle={{ border: '1px solid #e8e4de', borderRadius: 6, fontSize: 13 }}
                   />
-                  <Bar dataKey="amount" fill="#c9a84c" radius={[3, 3, 0, 0]} maxBarSize={24} />
+                  <Bar
+                    dataKey="amount"
+                    fill="#c9a84c"
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={24}
+                    cursor="pointer"
+                    onClick={(data) => {
+                      const dateStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(data.day).padStart(2, '0')}`;
+                      setSelectedDay((prev) => prev === dateStr ? null : dateStr);
+                      setActiveCat(null);
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -223,8 +260,46 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Day Detail Card */}
+          {selectedDay && (
+            <div style={styles.detailCard}>
+              <div style={styles.detailHeader}>
+                <span style={styles.detailTitle}>
+                  {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  {' — '}{formatCurrency(dayTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0))}
+                </span>
+                <button type="button" onClick={() => setSelectedDay(null)} style={styles.dismissBtn}>×</button>
+              </div>
+              {dayTxs.length === 0 ? (
+                <div style={{ padding: '20px 16px', color: '#6b6560', fontSize: 13 }}>No expenses on this day.</div>
+              ) : (
+                <table style={styles.detailTable}>
+                  <thead>
+                    <tr>
+                      {['Merchant', 'Category', 'Subcategory', 'Amount'].map((h) => (
+                        <th key={h} style={styles.detailTh}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dayTxs.map((tx) => (
+                      <tr key={tx.id}>
+                        <td style={styles.detailTd}>{tx.merchant_normalized || tx.description || '—'}</td>
+                        <td style={styles.detailTd}>{tx.category || '—'}</td>
+                        <td style={{ ...styles.detailTd, color: '#6b6560' }}>{tx.subcategory || '—'}</td>
+                        <td style={{ ...styles.detailTd, color: '#c0392b', fontWeight: 500 }}>
+                          {formatCurrency(Math.abs(tx.amount))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
           {/* Category Detail Card */}
-          {activeCat && (
+          {!selectedDay && activeCat && (
             <div style={styles.detailCard}>
               <div style={styles.detailHeader}>
                 <span style={styles.detailTitle}>{activeCat} — {monthLabel}</span>
@@ -258,6 +333,46 @@ export default function DashboardPage() {
               >
                 View all in Transactions →
               </button>
+            </div>
+          )}
+
+          {/* Daily Totals Table (default — nothing selected) */}
+          {!selectedDay && !activeCat && (
+            <div style={styles.detailCard}>
+              <div style={styles.detailHeader}>
+                <span style={styles.detailTitle}>Daily Totals — {monthLabel}</span>
+              </div>
+              <table style={styles.detailTable}>
+                <thead>
+                  <tr>
+                    {['Date', 'Day', 'Total Spent', 'Transactions'].map((h) => (
+                      <th key={h} style={styles.detailTh}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyData.filter((d) => d.amount > 0).map((d) => {
+                    const dateStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+                    const txCount = expenses.filter((tx) => tx.transaction_date === dateStr).length;
+                    return (
+                      <tr
+                        key={d.day}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => { setSelectedDay(dateStr); setActiveCat(null); }}
+                      >
+                        <td style={styles.detailTd}>{dateStr}</td>
+                        <td style={{ ...styles.detailTd, color: '#6b6560' }}>
+                          {new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
+                        </td>
+                        <td style={{ ...styles.detailTd, color: '#c0392b', fontWeight: 500 }}>
+                          {formatCurrency(d.amount)}
+                        </td>
+                        <td style={{ ...styles.detailTd, color: '#6b6560' }}>{txCount}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </>
@@ -306,6 +421,42 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     fontSize: 14,
     color: '#6b6560',
+  },
+  summaryCard: {
+    display: 'flex',
+    gap: 0,
+    background: '#fff',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    padding: '16px 24px',
+    marginBottom: 20,
+    boxShadow: '0 1px 4px rgba(45,33,22,0.06)',
+    alignItems: 'center',
+  },
+  summaryItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#6b6560',
+    fontWeight: 500,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: '#c9a84c',
+  },
+  summaryDivider: {
+    width: 1,
+    height: 40,
+    background: '#e8e4de',
+    margin: '0 16px',
   },
   chartsRow: {
     display: 'flex',

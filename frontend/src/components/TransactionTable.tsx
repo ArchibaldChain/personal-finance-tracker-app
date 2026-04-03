@@ -187,7 +187,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                     {isEditing && cellEdit.openStep === 'category' ? (
                       <select
                         autoFocus
-                        value={cellEdit.category ?? ''}
+                        defaultValue=""
                         onChange={(e) => { e.stopPropagation(); handleCategorySelect(tx, e.target.value); }}
                         onBlur={() => setCellEdit((prev) => {
                           if (!prev) return prev;
@@ -237,7 +237,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                     {isEditing && cellEdit.openStep === 'subcategory' ? (
                       <select
                         autoFocus
-                        value={cellEdit.subcategory ?? ''}
+                        defaultValue=""
                         onChange={(e) => { e.stopPropagation(); handleSubcategorySelect(e.target.value); }}
                         onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
                         onClick={(e) => e.stopPropagation()}
