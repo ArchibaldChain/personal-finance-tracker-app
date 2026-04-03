@@ -79,10 +79,15 @@ export default function TransactionTable({
     [categories]
   );
 
-  function openCategoryDropdown(tx: Transaction, e: React.MouseEvent) {
-    e.stopPropagation();
-    setCellEdit({ txId: tx.id, category: tx.category, subcategory: tx.subcategory, openStep: 'category' });
-  }
+function openCategoryDropdown(tx: Transaction, e: React.MouseEvent) {
+  e.stopPropagation();
+  setCellEdit((prev) => {
+    if (prev?.txId === tx.id) {
+      return { ...prev, openStep: 'category' };
+    }
+    return { txId: tx.id, category: tx.category, subcategory: tx.subcategory, openStep: 'category' };
+  });
+}
 
   function handleCategorySelect(tx: Transaction, value: string) {
     const cat = value || null;
@@ -95,10 +100,20 @@ export default function TransactionTable({
     });
   }
 
-  function handleSubcategorySelect(value: string) {
-    if (!cellEdit) return;
-    setCellEdit({ ...cellEdit, subcategory: value || null, openStep: null });
-  }
+function handleSubcategorySelect(value: string) {
+  if (!cellEdit) return;
+  setCellEdit({ ...cellEdit, subcategory: value || null, openStep: null });
+}
+
+function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
+  e.stopPropagation();
+  setCellEdit((prev) => {
+    if (prev?.txId !== tx.id || !prev.category) return prev;
+    const subcats = categories.find((c) => c.name === prev.category)?.subcategories ?? [];
+    if (subcats.length === 0) return prev;
+    return { ...prev, openStep: 'subcategory' };
+  });
+}
 
   function handleSave() {
     if (!cellEdit) return;
@@ -166,15 +181,19 @@ export default function TransactionTable({
 
                   {/* Category cell */}
                   <td
-                    style={{ ...styles.td, cursor: isEditing ? 'default' : 'pointer' }}
-                    onClick={(e) => !isEditing && openCategoryDropdown(tx, e)}
+                    style={{ ...styles.td, cursor: 'pointer' }}
+                    onClick={(e) => openCategoryDropdown(tx, e)}
                   >
                     {isEditing && cellEdit.openStep === 'category' ? (
                       <select
                         autoFocus
-                        defaultValue={tx.category ?? ''}
+                        value={cellEdit.category ?? ''}
                         onChange={(e) => { e.stopPropagation(); handleCategorySelect(tx, e.target.value); }}
-                        onBlur={handleCancel}
+                        onBlur={() => setCellEdit((prev) => {
+                          if (!prev) return prev;
+                          if (prev.openStep !== 'category') return prev;
+                          return { ...prev, openStep: null };
+                        })}
                         onClick={(e) => e.stopPropagation()}
                         style={styles.inlineSelect}
                       >
@@ -206,11 +225,19 @@ export default function TransactionTable({
                   </td>
 
                   {/* Subcategory cell */}
-                  <td style={{ ...styles.td, color: '#6b6560', fontSize: 13 }}>
+                  <td
+                    style={{
+                      ...styles.td,
+                      color: '#6b6560',
+                      fontSize: 13,
+                      cursor: isEditing && pendingSubcats.length > 0 ? 'pointer' : 'default',
+                    }}
+                    onClick={(e) => isEditing && pendingSubcats.length > 0 && openSubcategoryDropdown(tx, e)}
+                  >
                     {isEditing && cellEdit.openStep === 'subcategory' ? (
                       <select
                         autoFocus
-                        defaultValue={tx.subcategory ?? ''}
+                        value={cellEdit.subcategory ?? ''}
                         onChange={(e) => { e.stopPropagation(); handleSubcategorySelect(e.target.value); }}
                         onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
                         onClick={(e) => e.stopPropagation()}
