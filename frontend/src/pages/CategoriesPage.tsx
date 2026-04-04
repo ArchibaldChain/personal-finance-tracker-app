@@ -88,8 +88,8 @@ function SubcategoryRow({ sub, onUpdate, onDelete }: SubcategoryRowProps) {
         />
         <IconPicker value={icon} onChange={setIcon} />
         <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-          <button type="button" onClick={handleSave} style={styles.saveBtn}>Save</button>
-          <button type="button" onClick={() => setEditing(false)} style={styles.cancelBtn}>Cancel</button>
+          <button type="button" onClick={handleSave} style={styles.saveBtn} className="cat-btn-sub">Save</button>
+          <button type="button" onClick={() => setEditing(false)} style={styles.cancelBtn} className="cat-btn-cancel">Cancel</button>
         </div>
       </div>
     );
@@ -147,8 +147,8 @@ function AddSubcategoryForm({ categoryId, onAdd }: AddSubcategoryFormProps) {
       />
       <IconPicker value={icon} onChange={setIcon} />
       <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-        <button type="submit" style={styles.saveBtn}>Add</button>
-        <button type="button" onClick={() => setOpen(false)} style={styles.cancelBtn}>Cancel</button>
+        <button type="submit" style={styles.saveBtn} className="cat-btn-sub">Add</button>
+        <button type="button" onClick={() => setOpen(false)} style={styles.cancelBtn} className="cat-btn-cancel">Cancel</button>
       </div>
     </form>
   );
@@ -228,6 +228,12 @@ export default function CategoriesPage() {
 
   return (
     <div style={styles.layout}>
+      <style>{`
+        .cat-btn-primary:active { background: #a8872f !important; transform: scale(0.96); }
+        .cat-btn-cancel:active  { background: #ece8e0 !important; transform: scale(0.96); }
+        .cat-btn-sub:active     { background: #a8872f !important; transform: scale(0.96); }
+        .cat-btn-primary, .cat-btn-cancel, .cat-btn-sub { transition: background 0.1s, transform 0.08s; }
+      `}</style>
       {/* Left Panel */}
       <div style={styles.leftPanel}>
         <div style={styles.leftScroll}>
@@ -268,6 +274,7 @@ export default function CategoriesPage() {
           type="button"
           onClick={() => { setIsAddingCategory(true); setSelectedId(null); }}
           style={styles.addCatBtn}
+          className="cat-btn-primary"
         >
           + Add Category
         </button>
@@ -294,8 +301,8 @@ export default function CategoriesPage() {
               />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" style={styles.saveChangesBtn}>Create Category</button>
-              <button type="button" onClick={() => setIsAddingCategory(false)} style={styles.cancelBtnLg}>Cancel</button>
+              <button type="submit" style={styles.saveChangesBtn} className="cat-btn-primary">Create Category</button>
+              <button type="button" onClick={() => setIsAddingCategory(false)} style={styles.cancelBtnLg} className="cat-btn-cancel">Cancel</button>
             </div>
           </form>
         ) : selectedCategory ? (
@@ -331,7 +338,7 @@ export default function CategoriesPage() {
               </div>
             </div>
 
-            <button type="button" onClick={handleSaveCategory} style={styles.saveChangesBtn}>
+            <button type="button" onClick={handleSaveCategory} style={styles.saveChangesBtn} className="cat-btn-primary">
               Save Changes
             </button>
           </div>

@@ -12,9 +12,17 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { listTransactions } from '../api/transactions';
+import { listTransactions, updateTransaction } from '../api/transactions';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
-import type { Transaction } from '../types';
+import { useCategories } from '../hooks/useCategories';
+import type { Category, Transaction } from '../types';
+
+interface CellEdit {
+  txId: number;
+  category: string | null;
+  subcategory: string | null;
+  openStep: 'category' | 'subcategory' | null;
+}
 
 const WARM_COLORS = [
   '#c9a84c', '#c0392b', '#5a8a6a', '#d97706', '#8b6a8a',
@@ -41,7 +49,122 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 }
 
+// ── Shared editable transaction table used in both day and category detail cards ──
+interface TxDetailTableProps {
+  txs: Transaction[];
+  showDate?: boolean;
+  cellEdit: CellEdit | null;
+  setCellEdit: React.Dispatch<React.SetStateAction<CellEdit | null>>;
+  categories: Category[];
+  catMap: Record<string, Category>;
+  onSave: () => void;
+}
+
+function TxDetailTable({ txs, showDate, cellEdit, setCellEdit, categories, catMap, onSave }: TxDetailTableProps) {
+  function openCategoryEdit(tx: Transaction, e: React.MouseEvent) {
+    e.stopPropagation();
+    setCellEdit((prev) =>
+      prev?.txId === tx.id
+        ? { ...prev, openStep: 'category' }
+        : { txId: tx.id, category: tx.category, subcategory: tx.subcategory, openStep: 'category' }
+    );
+  }
+
+  function handleCategorySelect(tx: Transaction, value: string) {
+    const cat = value || null;
+    const subcats = cat ? (catMap[cat]?.subcategories ?? []) : [];
+    setCellEdit({ txId: tx.id, category: cat, subcategory: null, openStep: subcats.length > 0 ? 'subcategory' : null });
+  }
+
+  function handleSubcategorySelect(value: string) {
+    setCellEdit((prev) => prev ? { ...prev, subcategory: value || null, openStep: null } : null);
+  }
+
+  const headers = [...(showDate ? ['Date', 'Day'] : []), 'Merchant', 'Category', 'Subcategory', 'Amount', ''];
+
+  return (
+    <table style={detailStyles.table}>
+      <thead>
+        <tr>{headers.map((h) => <th key={h} style={detailStyles.th}>{h}</th>)}</tr>
+      </thead>
+      <tbody>
+        {txs.map((tx) => {
+          const isEditing = cellEdit?.txId === tx.id;
+          const displayCat = isEditing ? cellEdit.category : tx.category;
+          const displaySub = isEditing ? cellEdit.subcategory : tx.subcategory;
+          const pendingSubcats = isEditing && cellEdit.category ? (catMap[cellEdit.category]?.subcategories ?? []) : [];
+          return (
+            <tr key={tx.id}>
+              {showDate && <td style={detailStyles.td}>{tx.transaction_date}</td>}
+              {showDate && (
+                <td style={{ ...detailStyles.td, color: '#6b6560' }}>
+                  {new Date(tx.transaction_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
+                </td>
+              )}
+              <td style={detailStyles.td}>{tx.merchant_normalized || tx.description || '—'}</td>
+
+              {/* Category */}
+              <td style={{ ...detailStyles.td, cursor: 'pointer' }} onClick={(e) => openCategoryEdit(tx, e)}>
+                {isEditing && cellEdit.openStep === 'category' ? (
+                  <select autoFocus defaultValue="" onChange={(e) => { e.stopPropagation(); handleCategorySelect(tx, e.target.value); }} onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)} onClick={(e) => e.stopPropagation()} style={detailStyles.select}>
+                    <option value="">— None —</option>
+                    {categories.map((c) => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
+                  </select>
+                ) : (
+                  <span style={{ color: displayCat ? '#2d2116' : '#c8c4be' }}>{displayCat || '—'}</span>
+                )}
+              </td>
+
+              {/* Subcategory */}
+              <td
+                style={{ ...detailStyles.td, color: '#6b6560', cursor: isEditing && pendingSubcats.length > 0 ? 'pointer' : 'default' }}
+                onClick={(e) => { if (isEditing && pendingSubcats.length > 0) { e.stopPropagation(); setCellEdit((prev) => prev ? { ...prev, openStep: 'subcategory' } : null); } }}
+              >
+                {isEditing && cellEdit.openStep === 'subcategory' ? (
+                  <select autoFocus defaultValue="" onChange={(e) => { e.stopPropagation(); handleSubcategorySelect(e.target.value); }} onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)} onClick={(e) => e.stopPropagation()} style={detailStyles.select}>
+                    <option value="">— None —</option>
+                    {pendingSubcats.map((s) => <option key={s.id} value={s.name}>{s.icon} {s.name}</option>)}
+                  </select>
+                ) : (
+                  displaySub || '—'
+                )}
+              </td>
+
+              <td style={{ ...detailStyles.td, color: '#c0392b', fontWeight: 500 }}>
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(tx.amount))}
+              </td>
+
+              {/* Actions */}
+              <td style={{ ...detailStyles.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {isEditing && cellEdit.openStep !== 'category' ? (
+                  <div style={{ display: 'inline-flex', gap: 4 }}>
+                    <button type="button" onClick={onSave} style={detailStyles.saveBtn} title="Save">✓</button>
+                    <button type="button" onClick={() => setCellEdit(null)} style={detailStyles.cancelBtn} title="Cancel">✕</button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={(e) => openCategoryEdit(tx, e)} style={detailStyles.editBtn} title="Edit category">✎</button>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+const detailStyles: Record<string, React.CSSProperties> = {
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+  th: { padding: '8px 16px', textAlign: 'left', background: '#faf8f4', borderBottom: '1px solid #e8e4de', fontWeight: 600, color: '#6b6560', fontSize: 12 },
+  td: { padding: '10px 16px', borderBottom: '1px solid #f3f0eb', color: '#2d2116' },
+  select: { padding: '3px 6px', border: '1px solid #c9a84c', borderRadius: 6, fontSize: 12, color: '#2d2116', background: '#fff', outline: 'none', cursor: 'pointer', minWidth: 130 },
+  saveBtn: { padding: '3px 8px', background: 'none', color: '#5a8a6a', border: '1px solid #5a8a6a', borderRadius: 4, cursor: 'pointer', fontSize: 14, lineHeight: 1 },
+  cancelBtn: { padding: '3px 8px', background: 'none', color: '#c0392b', border: '1px solid #c0392b', borderRadius: 4, cursor: 'pointer', fontSize: 14, lineHeight: 1 },
+  editBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#6b6560', fontSize: 14, padding: '2px 4px', borderRadius: 4 },
+};
+
 export default function DashboardPage() {
+  const categories = useCategories();
   const navigate = useNavigate();
   const [month, setMonth] = useState<MonthValue>(getPrevMonth());
   const [txList, setTxList] = useState<Transaction[]>([]);
@@ -49,6 +172,19 @@ export default function DashboardPage() {
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [cellEdit, setCellEdit] = useState<CellEdit | null>(null);
+
+  const catMap = useMemo(
+    () => Object.fromEntries(categories.map((c: Category) => [c.name, c])),
+    [categories]
+  );
+
+  async function handleSave() {
+    if (!cellEdit) return;
+    await updateTransaction(cellEdit.txId, { category: cellEdit.category, subcategory: cellEdit.subcategory });
+    setCellEdit(null);
+    fetchData(month);
+  }
 
   const fetchData = useCallback(async (m: MonthValue) => {
     setIsLoading(true);
@@ -164,7 +300,7 @@ export default function DashboardPage() {
 
           <div style={styles.chartsRow}>
             {/* Bar Chart */}
-            <div style={{ ...styles.card, flex: '1 1 55%', minWidth: 300 }}>
+            <div style={{ ...styles.card, flex: '1 1 52%', minWidth: 300 }}>
               <h2 style={styles.chartTitle}>Daily Expenses — {monthLabel}</h2>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={dailyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -205,7 +341,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Pie Chart */}
-            <div style={{ ...styles.card, flex: '1 1 40%', minWidth: 280 }}>
+            <div style={{ ...styles.card, flex: '1 1 44%', minWidth: 300, paddingRight: 12 }}>
               <h2 style={styles.chartTitle}>By Category — {monthLabel}</h2>
               <div style={styles.pieRow}>
                 <div style={{ flex: '0 0 200px', position: 'relative' }}>
@@ -219,7 +355,7 @@ export default function DashboardPage() {
                         cy="50%"
                         innerRadius={55}
                         outerRadius={85}
-                        onClick={(entry) => setActiveCat(activeCat === entry.name ? null : entry.name)}
+                        onClick={(entry) => { setActiveCat((prev) => prev === entry.name ? null : entry.name); setSelectedDay(null); }}
                         style={{ cursor: 'pointer' }}
                       >
                         {categoryData.map((entry, i) => (
@@ -247,7 +383,7 @@ export default function DashboardPage() {
                         ...styles.legendItem,
                         opacity: activeCat && activeCat !== entry.name ? 0.5 : 1,
                       }}
-                      onClick={() => setActiveCat(activeCat === entry.name ? null : entry.name)}
+                      onClick={() => { setActiveCat((prev) => prev === entry.name ? null : entry.name); setSelectedDay(null); }}
                     >
                       <span style={{ ...styles.legendDot, background: WARM_COLORS[i % WARM_COLORS.length] }} />
                       <span style={styles.legendName}>{entry.name}</span>
@@ -268,70 +404,37 @@ export default function DashboardPage() {
                   {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                   {' — '}{formatCurrency(dayTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0))}
                 </span>
-                <button type="button" onClick={() => setSelectedDay(null)} style={styles.dismissBtn}>×</button>
+                <button type="button" onClick={() => { setSelectedDay(null); setCellEdit(null); }} style={styles.dismissBtn}>×</button>
               </div>
               {dayTxs.length === 0 ? (
                 <div style={{ padding: '20px 16px', color: '#6b6560', fontSize: 13 }}>No expenses on this day.</div>
               ) : (
-                <table style={styles.detailTable}>
-                  <thead>
-                    <tr>
-                      {['Merchant', 'Category', 'Subcategory', 'Amount'].map((h) => (
-                        <th key={h} style={styles.detailTh}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dayTxs.map((tx) => (
-                      <tr key={tx.id}>
-                        <td style={styles.detailTd}>{tx.merchant_normalized || tx.description || '—'}</td>
-                        <td style={styles.detailTd}>{tx.category || '—'}</td>
-                        <td style={{ ...styles.detailTd, color: '#6b6560' }}>{tx.subcategory || '—'}</td>
-                        <td style={{ ...styles.detailTd, color: '#c0392b', fontWeight: 500 }}>
-                          {formatCurrency(Math.abs(tx.amount))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <TxDetailTable txs={dayTxs} showDate={true} cellEdit={cellEdit} setCellEdit={setCellEdit} categories={categories} catMap={catMap} onSave={handleSave} />
               )}
             </div>
           )}
 
           {/* Category Detail Card */}
-          {!selectedDay && activeCat && (
+          {activeCat && (
             <div style={styles.detailCard}>
               <div style={styles.detailHeader}>
                 <span style={styles.detailTitle}>{activeCat} — {monthLabel}</span>
-                <button type="button" onClick={() => setActiveCat(null)} style={styles.dismissBtn}>×</button>
+                <button type="button" onClick={() => { setActiveCat(null); setCellEdit(null); }} style={styles.dismissBtn}>×</button>
               </div>
-              <table style={styles.detailTable}>
-                <thead>
-                  <tr>
-                    {['Date', 'Merchant', 'Subcategory', 'Amount'].map((h) => (
-                      <th key={h} style={styles.detailTh}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeCatTxs.map((tx) => (
-                    <tr key={tx.id}>
-                      <td style={styles.detailTd}>{tx.transaction_date}</td>
-                      <td style={styles.detailTd}>{tx.merchant_normalized || tx.description || '—'}</td>
-                      <td style={{ ...styles.detailTd, color: '#6b6560' }}>{tx.subcategory || '—'}</td>
-                      <td style={{ ...styles.detailTd, color: '#c0392b', fontWeight: 500 }}>
-                        {formatCurrency(Math.abs(tx.amount))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <TxDetailTable txs={activeCatTxs} showDate={true} cellEdit={cellEdit} setCellEdit={setCellEdit} categories={categories} catMap={catMap} onSave={handleSave} />
               <button
                 type="button"
-                onClick={() => navigate(`/transactions`)}
+                onClick={() => {
+                  const range = monthToRange(month);
+                  const params = new URLSearchParams();
+                  if (activeCat) params.set('category', activeCat);
+                  params.set('date_from', range.from);
+                  params.set('date_to', range.to);
+                  navigate(`/transactions?${params.toString()}`);
+                }}
                 style={styles.viewAllLink}
               >
-                View all in Transactions →
+                View them in Transactions →
               </button>
             </div>
           )}
@@ -460,7 +563,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   chartsRow: {
     display: 'flex',
-    gap: 20,
+    gap: 12,
     marginBottom: 20,
     flexWrap: 'wrap',
   },
@@ -496,6 +599,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
     overflowY: 'auto',
     maxHeight: 220,
+    paddingRight: 8,
   },
   legendItem: {
     display: 'flex',
@@ -552,6 +656,46 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '10px 16px',
     borderBottom: '1px solid #f3f0eb',
     color: '#2d2116',
+  },
+  inlineSelect: {
+    padding: '3px 6px',
+    border: '1px solid #c9a84c',
+    borderRadius: 6,
+    fontSize: 12,
+    color: '#2d2116',
+    background: '#fff',
+    outline: 'none',
+    cursor: 'pointer',
+    minWidth: 130,
+  },
+  saveBtn: {
+    padding: '3px 8px',
+    background: 'none',
+    color: '#5a8a6a',
+    border: '1px solid #5a8a6a',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 14,
+    lineHeight: 1,
+  },
+  cancelBtn: {
+    padding: '3px 8px',
+    background: 'none',
+    color: '#c0392b',
+    border: '1px solid #c0392b',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 14,
+    lineHeight: 1,
+  },
+  editBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#6b6560',
+    fontSize: 14,
+    padding: '2px 4px',
+    borderRadius: 4,
   },
   viewAllLink: {
     display: 'block',

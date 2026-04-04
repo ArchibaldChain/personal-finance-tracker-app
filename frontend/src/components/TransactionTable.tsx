@@ -267,7 +267,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
 
                   {/* Edit / Save+Cancel column */}
                   <td style={{ ...styles.td, textAlign: 'center', padding: '6px 8px' }}>
-                    {isEditing && cellEdit.openStep === null ? (
+                    {isEditing && cellEdit.openStep !== 'category' ? (
                       <div style={{ display: 'inline-flex', gap: 4 }}>
                         <button
                           type="button"
@@ -275,7 +275,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                           style={styles.saveBtn}
                           title="Save"
                         >
-                          Save
+                          ✓
                         </button>
                         <button
                           type="button"
@@ -368,22 +368,23 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
   },
   saveBtn: {
-    padding: '3px 10px',
-    background: '#c9a84c',
-    color: '#fff',
-    border: 'none',
+    padding: '3px 8px',
+    background: 'none',
+    color: '#5a8a6a',
+    border: '1px solid #5a8a6a',
     borderRadius: 4,
     cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: 14,
+    lineHeight: 1,
   },
   cancelBtn: {
-    padding: '3px 7px',
+    padding: '3px 8px',
     background: 'none',
-    color: '#6b6560',
-    border: '1px solid #e8e4de',
+    color: '#c0392b',
+    border: '1px solid #c0392b',
     borderRadius: 4,
     cursor: 'pointer',
-    fontSize: 12,
+    fontSize: 14,
+    lineHeight: 1,
   },
 };

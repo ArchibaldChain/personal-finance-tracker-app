@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getTransactionSummary, listTransactions, updateTransaction } from '../api/transactions';
 import type { TransactionSummary } from '../api/transactions';
 import AddTransactionModal from '../components/AddTransactionModal';
@@ -18,6 +19,14 @@ const DEFAULT_FILTERS: TransactionFilters = {
   page_size: 50,
 };
 
+function getPrevMonth(): MonthValue {
+  const now = new Date();
+  const m = now.getMonth(); // 0-based
+  return m === 0
+    ? { year: now.getFullYear() - 1, month: 12 }
+    : { year: now.getFullYear(), month: m };
+}
+
 function monthToDateRange(m: MonthValue) {
   const from = `${m.year}-${String(m.month).padStart(2, '0')}-01`;
   const lastDay = new Date(m.year, m.month, 0).getDate();
@@ -33,8 +42,29 @@ export default function TransactionsPage() {
   const categories = useCategories();
   const sources = useSources();
   const sourcesMap = Object.fromEntries(sources.map((s) => [s.key, s.display_name]));
-  const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_FILTERS);
-  const [month, setMonth] = useState<MonthValue | null>(null);
+  const location = useLocation();
+  const [month, setMonth] = useState<MonthValue | null>(() => {
+    const df = new URLSearchParams(location.search).get('date_from');
+    if (df) {
+      const [y, m] = df.split('-').map(Number);
+      return { year: y, month: m };
+    }
+    return getPrevMonth();
+  });
+  const [filters, setFilters] = useState<TransactionFilters>(() => {
+    const params = new URLSearchParams(location.search);
+    const f: TransactionFilters = { ...DEFAULT_FILTERS };
+    if (params.get('category')) f.category = params.get('category')!;
+    if (params.get('date_from')) {
+      f.date_from = params.get('date_from')!;
+      f.date_to = params.get('date_to')!;
+    } else {
+      const range = monthToDateRange(getPrevMonth());
+      f.date_from = range.from;
+      f.date_to = range.to;
+    }
+    return f;
+  });
   const [data, setData] = useState<TransactionListResponse>({ items: [], total: 0, page: 1, page_size: 50 });
   const [isLoading, setIsLoading] = useState(false);
   const [summary, setSummary] = useState<TransactionSummary>({ total_spent: 0, transaction_count: 0, largest_expense: 0 });
