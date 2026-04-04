@@ -52,7 +52,10 @@ def list_transactions(
         query = query.filter(Transaction.category == category)
 
     if source_type:
-        query = query.filter(Transaction.source_type == source_type)
+        if source_type in ("csv", "manual"):
+            query = query.filter(Transaction.source_type == source_type)
+        else:
+            query = query.filter(Transaction.source_name == source_type)
 
     if needs_review:
         query = query.filter(
@@ -105,7 +108,10 @@ def get_transaction_summary(
     if category:
         query = query.filter(Transaction.category == category)
     if source_type:
-        query = query.filter(Transaction.source_type == source_type)
+        if source_type in ("csv", "manual"):
+            query = query.filter(Transaction.source_type == source_type)
+        else:
+            query = query.filter(Transaction.source_name == source_type)
     if needs_review:
         query = query.filter(
             Transaction.classification_confidence.isnot(None),

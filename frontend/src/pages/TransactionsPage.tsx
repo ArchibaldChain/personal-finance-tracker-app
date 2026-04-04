@@ -161,6 +161,7 @@ export default function TransactionsPage() {
         filters={filters}
         onChange={handleFiltersChange}
         categories={categories}
+        sources={sources}
         onAddClick={() => setIsAddOpen(true)}
         month={month}
         onMonthChange={handleMonthChange}

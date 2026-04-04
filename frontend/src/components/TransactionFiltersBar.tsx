@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { Category, TransactionFilters } from '../types';
+import type { Category, Source, TransactionFilters } from '../types';
 import MonthPicker, { MonthValue } from './MonthPicker';
 
 interface TransactionFiltersBarProps {
   filters: TransactionFilters;
   onChange: (filters: TransactionFilters) => void;
   categories: Category[];
+  sources: Source[];
   onAddClick: () => void;
   month: MonthValue | null;
   onMonthChange: (v: MonthValue | null) => void;
@@ -15,6 +16,7 @@ export default function TransactionFiltersBar({
   filters,
   onChange,
   categories,
+  sources,
   onAddClick,
   month,
   onMonthChange,
@@ -67,7 +69,9 @@ export default function TransactionFiltersBar({
       <select value={filters.source_type ?? ''} onChange={handleSourceType} style={styles.input}>
         <option value="">All sources</option>
         <option value="manual">Manual</option>
-        <option value="csv">CSV Import</option>
+        {sources.map((s) => (
+          <option key={s.key} value={s.key}>{s.display_name}</option>
+        ))}
       </select>
       <button
         onClick={handleNeedsReview}
