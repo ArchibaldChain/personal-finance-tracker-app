@@ -9,7 +9,7 @@ import Pagination from '../components/Pagination';
 import TransactionFiltersBar from '../components/TransactionFiltersBar';
 import TransactionTable from '../components/TransactionTable';
 import { useCategories } from '../hooks/useCategories';
-import { useSources } from '../hooks/useSources';
+import { useUsedSources } from '../hooks/useSources';
 import type { Transaction, TransactionFilters, TransactionListResponse } from '../types';
 
 const DEFAULT_FILTERS: TransactionFilters = {
@@ -40,7 +40,7 @@ function formatCurrency(amount: number): string {
 
 export default function TransactionsPage() {
   const categories = useCategories();
-  const sources = useSources();
+  const sources = useUsedSources();
   const sourcesMap = Object.fromEntries(sources.map((s) => [s.key, s.display_name]));
   const location = useLocation();
   const [month, setMonth] = useState<MonthValue | null>(() => {

@@ -41,6 +41,11 @@ export async function deleteSubcategory(id: number): Promise<void> {
 }
 
 export async function listSources(): Promise<Source[]> {
+  const resp = await client.get<{ sources: Source[] }>('/sources');
+  return resp.data.sources;
+}
+
+export async function listUsedSources(): Promise<Source[]> {
   const resp = await client.get<{ sources: Source[] }>('/sources/used');
   return resp.data.sources;
 }
