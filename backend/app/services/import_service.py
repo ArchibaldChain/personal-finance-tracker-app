@@ -1,7 +1,10 @@
 import json
+import logging
 from datetime import datetime
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.config import get_settings
 from app.models.classification_log_model import ClassificationLog
@@ -12,6 +15,7 @@ from app.parsers import registry
 from app.services import category_service
 from app.services.classification import get_classifier
 from app.services.classification.category_tree import build_category_tree
+from app.services.classification.simple_classifier import SimpleClassifier
 
 
 def create_import(db: Session, source_name: str, file_name: str) -> Import:
@@ -72,13 +76,26 @@ def process_import(db: Session, import_id: int) -> Import:
     parser = registry.get(import_record.source_name)
     rows = db.query(ImportRow).filter(ImportRow.import_id == import_id).all()
 
-    # Build classifier and category tree once for the whole batch
+    # Build classifiers and category tree once for the whole batch.
+    # SimpleClassifier runs first (free, instant); LLM is the fallback.
     classifier = None
     category_tree: dict[str, list[str]] = {}
     settings = get_settings()
     if settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
         classifier = get_classifier()
         category_tree = build_category_tree(category_service.list_categories(db))
+    elif settings.CLASSIFICATION_ENABLED:
+        category_tree = build_category_tree(category_service.list_categories(db))
+
+    pre_classifier = SimpleClassifier() if category_tree else None
+    logger.info(
+        "import=%d source=%s rows=%d pre_classifier=%s llm_classifier=%s",
+        import_id,
+        import_record.source_name,
+        len(rows),
+        "enabled" if pre_classifier else "disabled",
+        classifier._model if classifier else "disabled",
+    )
 
     parsed_count = 0
     failed_count = 0
@@ -91,19 +108,41 @@ def process_import(db: Session, import_id: int) -> Import:
             category: str | None = None
             subcategory: str | None = None
             confidence: float | None = None
-            if classifier and category_tree:
+            classifier_model: str | None = None
+            if category_tree:
                 seen: set[str] = set()
                 parts: list[str] = []
-                for p in [parsed.merchant_raw, parsed.description, parsed.notes]:
+                for p in [parsed.merchant_raw, parsed.description, parsed.notes, f"Amount {parsed.amount} {parsed.currency}"]:
                     if p and p not in seen:
                         seen.add(p)
                         parts.append(p)
                 desc = " ".join(parts)
                 if desc:
-                    result = classifier.classify(desc, category_tree)
-                    category = result["category"]
-                    subcategory = result["subcategory"]
-                    confidence = result["confidence"]
+                    # Try rule-based classifier first
+                    if pre_classifier:
+                        result = pre_classifier.classify(desc, category_tree)
+                        if result["confidence"] > 0.0:
+                            category = result["category"]
+                            subcategory = result["subcategory"]
+                            confidence = result["confidence"]
+                            classifier_model = "simple"
+                            logger.debug(
+                                "pre_classifier hit: %r -> %s / %s",
+                                desc, category, subcategory,
+                            )
+
+                    # Fall back to LLM if no rule matched
+                    if confidence is None and classifier:
+                        logger.debug("pre_classifier miss, calling LLM for: %r", desc)
+                        result = classifier.classify(desc, category_tree)
+                        category = result["category"]
+                        subcategory = result["subcategory"]
+                        confidence = result["confidence"]
+                        classifier_model = classifier._model
+                        logger.debug(
+                            "llm classifier: %r -> %s / %s (confidence=%.2f)",
+                            desc, category, subcategory, confidence or 0.0,
+                        )
 
             # Extension point: deduplication check on external_id can go here.
 
@@ -133,7 +172,7 @@ def process_import(db: Session, import_id: int) -> Import:
                     category=category,
                     subcategory=subcategory,
                     confidence=confidence,
-                    model=classifier._model,
+                    model=classifier_model,
                     # transaction_id is None here — ID not available until batch commit
                 ))
 
@@ -148,6 +187,10 @@ def process_import(db: Session, import_id: int) -> Import:
     import_record.parsed_rows = parsed_count
     import_record.failed_rows = failed_count
     import_record.status = "processed" if failed_count == 0 else "processed_with_errors"
+    logger.info(
+        "import=%d done: parsed=%d failed=%d status=%s",
+        import_id, parsed_count, failed_count, import_record.status,
+    )
     db.commit()
     db.refresh(import_record)
     return import_record

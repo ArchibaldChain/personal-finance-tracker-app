@@ -122,10 +122,27 @@ def get_transaction_summary(
     if date_to:
         query = query.filter(Transaction.transaction_date <= date_to)
 
-    expense_query = query.filter(Transaction.amount < 0)
+    EXCLUDED_CATEGORIES = ("Transfers", "Income")
+    spending_query = query.filter(
+        or_(
+            Transaction.category.is_(None),
+            Transaction.category.notin_(EXCLUDED_CATEGORIES),
+        )
+    )
+
+    expenses = spending_query.with_entities(
+        func.sum(case((Transaction.amount < 0, func.abs(Transaction.amount)), else_=0))
+    ).scalar() or 0
+    refunds = spending_query.with_entities(
+        func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0))
+    ).scalar() or 0
+    total_spent = max(float(expenses) - float(refunds), 0)
+
+    largest = spending_query.filter(Transaction.amount < 0).with_entities(
+        func.max(func.abs(Transaction.amount))
+    ).scalar() or 0
+
     total_count = query.with_entities(func.count(Transaction.id)).scalar() or 0
-    total_spent = expense_query.with_entities(func.sum(func.abs(Transaction.amount))).scalar() or 0
-    largest = expense_query.with_entities(func.max(func.abs(Transaction.amount))).scalar() or 0
 
     return {
         "total_spent": float(total_spent),
