@@ -130,8 +130,8 @@ function TxDetailTable({ txs, showDate, cellEdit, setCellEdit, categories, catMa
                 )}
               </td>
 
-              <td style={{ ...detailStyles.td, color: '#c0392b', fontWeight: 500 }}>
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(tx.amount))}
+              <td style={{ ...detailStyles.td, color: tx.amount > 0 ? '#16a34a' : '#c0392b', fontWeight: 500 }}>
+                {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount)}
               </td>
 
               {/* Actions */}
@@ -214,20 +214,30 @@ export default function DashboardPage() {
     setSelectedDay(null);
   }, [month, fetchData]);
 
-  const expenses = useMemo(() => txList.filter((tx) => tx.amount < 0), [txList]);
+  const EXCLUDED_CATEGORIES = ['Transfers', 'Income'];
+  const expenses = useMemo(
+    () => txList.filter((tx) => tx.amount < 0 && !EXCLUDED_CATEGORIES.includes(tx.category ?? '')),
+    [txList]
+  );
+
+  const spendingTxs = useMemo(
+    () => txList.filter((tx) => !EXCLUDED_CATEGORIES.includes(tx.category ?? '')),
+    [txList]
+  );
 
   const dailyData = useMemo(() => {
     const map: Record<number, number> = {};
-    expenses.forEach((tx) => {
+    spendingTxs.forEach((tx) => {
       const day = parseInt(tx.transaction_date.split('-')[2], 10);
-      map[day] = (map[day] ?? 0) + Math.abs(tx.amount);
+      // expenses are negative amounts → add abs; refunds are positive → subtract
+      map[day] = (map[day] ?? 0) + (tx.amount < 0 ? Math.abs(tx.amount) : -tx.amount);
     });
     const lastDay = new Date(month.year, month.month, 0).getDate();
     return Array.from({ length: lastDay }, (_, i) => ({
       day: i + 1,
       amount: parseFloat((map[i + 1] ?? 0).toFixed(2)),
     }));
-  }, [expenses, month]);
+  }, [spendingTxs, month]);
 
   const categoryData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -241,17 +251,20 @@ export default function DashboardPage() {
       .sort((a, b) => b.value - a.value);
   }, [expenses]);
 
-  const totalSpent = useMemo(() => expenses.reduce((s, tx) => s + Math.abs(tx.amount), 0), [expenses]);
+  const totalSpent = useMemo(
+    () => spendingTxs.reduce((s, tx) => s - tx.amount, 0),
+    [spendingTxs]
+  );
   const largestExpense = useMemo(() => expenses.reduce((max, tx) => Math.max(max, Math.abs(tx.amount)), 0), [expenses]);
 
   const activeCatTxs = useMemo(
-    () => activeCat ? expenses.filter((tx) => (tx.category ?? 'Uncategorized') === activeCat) : [],
-    [activeCat, expenses]
+    () => activeCat ? spendingTxs.filter((tx) => (tx.category ?? 'Uncategorized') === activeCat) : [],
+    [activeCat, spendingTxs]
   );
 
   const dayTxs = useMemo(
-    () => selectedDay ? expenses.filter((tx) => tx.transaction_date === selectedDay) : [],
-    [selectedDay, expenses]
+    () => selectedDay ? spendingTxs.filter((tx) => tx.transaction_date === selectedDay) : [],
+    [selectedDay, spendingTxs]
   );
 
   const monthLabel = new Date(month.year, month.month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -402,7 +415,7 @@ export default function DashboardPage() {
               <div style={styles.detailHeader}>
                 <span style={styles.detailTitle}>
                   {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                  {' — '}{formatCurrency(dayTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0))}
+                  {' — '}{formatCurrency(dayTxs.reduce((s, tx) => s + (tx.amount < 0 ? Math.abs(tx.amount) : -tx.amount), 0))}
                 </span>
                 <button type="button" onClick={() => { setSelectedDay(null); setCellEdit(null); }} style={styles.dismissBtn}>×</button>
               </div>
@@ -456,7 +469,7 @@ export default function DashboardPage() {
                 <tbody>
                   {dailyData.filter((d) => d.amount > 0).map((d) => {
                     const dateStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
-                    const txCount = expenses.filter((tx) => tx.transaction_date === dateStr).length;
+                    const txCount = spendingTxs.filter((tx) => tx.transaction_date === dateStr).length;
                     return (
                       <tr
                         key={d.day}
