@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Bar,
   BarChart,
@@ -15,6 +14,7 @@ import {
 import { listTransactions, updateTransaction } from '../api/transactions';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
 import { useCategories } from '../hooks/useCategories';
+import { useSources } from '../hooks/useSources';
 import type { Category, Transaction } from '../types';
 
 interface CellEdit {
@@ -30,9 +30,28 @@ const WARM_COLORS = [
   '#3a5a8a', '#8a3a5a',
 ];
 
+const SECTIONS: { label: string; accent: string; filter: (tx: Transaction) => boolean }[] = [
+  {
+    label: 'Expenses',
+    accent: '#c0392b',
+    // All non-Income, non-Transfers — positive amounts here are refunds that reduce net expense
+    filter: (tx) => !['Transfers', 'Income'].includes(tx.category ?? ''),
+  },
+  {
+    label: 'Transfers',
+    accent: '#3a7a8a',
+    filter: (tx) => tx.category === 'Transfers',
+  },
+  {
+    label: 'Income',
+    accent: '#5a8a6a',
+    filter: (tx) => tx.category === 'Income',
+  },
+];
+
 function getPrevMonth(): MonthValue {
   const now = new Date();
-  const m = now.getMonth(); // 0-based
+  const m = now.getMonth();
   return m === 0
     ? { year: now.getFullYear() - 1, month: 12 }
     : { year: now.getFullYear(), month: m };
@@ -41,7 +60,7 @@ function getPrevMonth(): MonthValue {
 function monthToRange(m: MonthValue) {
   const from = `${m.year}-${String(m.month).padStart(2, '0')}-01`;
   const lastDay = new Date(m.year, m.month, 0).getDate();
-  const to = `${m.year}-${String(m.month).padStart(2, '00')}-${String(lastDay).padStart(2, '0')}`;
+  const to = `${m.year}-${String(m.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   return { from, to };
 }
 
@@ -49,7 +68,7 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 }
 
-// ── Shared editable transaction table used in both day and category detail cards ──
+// ── Shared editable transaction table ──
 interface TxDetailTableProps {
   txs: Transaction[];
   showDate?: boolean;
@@ -58,9 +77,15 @@ interface TxDetailTableProps {
   categories: Category[];
   catMap: Record<string, Category>;
   onSave: () => void;
+  excludedTxIds: Set<number>;
+  setExcludedTxIds: React.Dispatch<React.SetStateAction<Set<number>>>;
+  sourcesMap: Record<string, string>;
 }
 
-function TxDetailTable({ txs, showDate, cellEdit, setCellEdit, categories, catMap, onSave }: TxDetailTableProps) {
+function TxDetailTable({
+  txs, showDate, cellEdit, setCellEdit, categories, catMap, onSave,
+  excludedTxIds, setExcludedTxIds, sourcesMap,
+}: TxDetailTableProps) {
   function openCategoryEdit(tx: Transaction, e: React.MouseEvent) {
     e.stopPropagation();
     setCellEdit((prev) =>
@@ -80,12 +105,43 @@ function TxDetailTable({ txs, showDate, cellEdit, setCellEdit, categories, catMa
     setCellEdit((prev) => prev ? { ...prev, subcategory: value || null, openStep: null } : null);
   }
 
-  const headers = [...(showDate ? ['Date', 'Day'] : []), 'Merchant', 'Category', 'Subcategory', 'Amount', ''];
+  function toggleTx(id: number) {
+    setExcludedTxIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const allChecked = txs.length > 0 && txs.every((tx) => !excludedTxIds.has(tx.id));
+  const someChecked = txs.some((tx) => !excludedTxIds.has(tx.id));
+
+  function toggleAll(checked: boolean) {
+    setExcludedTxIds((prev) => {
+      const next = new Set(prev);
+      if (checked) txs.forEach((tx) => next.delete(tx.id));
+      else txs.forEach((tx) => next.add(tx.id));
+      return next;
+    });
+  }
+
+  const dateCols = showDate ? ['Date', 'Day'] : [];
+  const headers = ['', ...dateCols, 'Merchant', 'Category', 'Subcategory', 'Source', 'Amount', ''];
 
   return (
     <table style={detailStyles.table}>
       <thead>
-        <tr>{headers.map((h) => <th key={h} style={detailStyles.th}>{h}</th>)}</tr>
+        <tr>
+          <th style={{ ...detailStyles.th, width: 36, padding: '8px 8px 8px 16px' }}>
+            <input
+              type="checkbox"
+              checked={allChecked}
+              ref={(el) => { if (el) el.indeterminate = !allChecked && someChecked; }}
+              onChange={(e) => toggleAll(e.target.checked)}
+            />
+          </th>
+          {headers.slice(1).map((h) => <th key={h} style={detailStyles.th}>{h}</th>)}
+        </tr>
       </thead>
       <tbody>
         {txs.map((tx) => {
@@ -93,8 +149,19 @@ function TxDetailTable({ txs, showDate, cellEdit, setCellEdit, categories, catMa
           const displayCat = isEditing ? cellEdit.category : tx.category;
           const displaySub = isEditing ? cellEdit.subcategory : tx.subcategory;
           const pendingSubcats = isEditing && cellEdit.category ? (catMap[cellEdit.category]?.subcategories ?? []) : [];
+          const excluded = excludedTxIds.has(tx.id);
           return (
-            <tr key={tx.id}>
+            <tr key={tx.id} style={{ opacity: excluded ? 0.4 : 1 }}>
+              {/* Checkbox */}
+              <td style={{ ...detailStyles.td, width: 36, padding: '0 8px 0 16px' }}>
+                <input
+                  type="checkbox"
+                  checked={!excluded}
+                  onChange={() => toggleTx(tx.id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </td>
+
               {showDate && <td style={detailStyles.td}>{tx.transaction_date}</td>}
               {showDate && (
                 <td style={{ ...detailStyles.td, color: '#6b6560' }}>
@@ -130,7 +197,15 @@ function TxDetailTable({ txs, showDate, cellEdit, setCellEdit, categories, catMa
                 )}
               </td>
 
-              <td style={{ ...detailStyles.td, color: tx.amount > 0 ? '#16a34a' : '#c0392b', fontWeight: 500 }}>
+              {/* Source */}
+              <td style={detailStyles.td}>
+                <span style={detailStyles.sourceBadge}>
+                  {tx.source_type === 'manual' ? 'Manual' : (sourcesMap[tx.source_name ?? ''] ?? tx.source_name ?? 'CSV')}
+                </span>
+              </td>
+
+              {/* Amount */}
+              <td style={{ ...detailStyles.td, color: tx.amount > 0 ? '#5a8a6a' : '#c0392b', fontWeight: 500, textAlign: 'right' }}>
                 {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount)}
               </td>
 
@@ -161,11 +236,16 @@ const detailStyles: Record<string, React.CSSProperties> = {
   saveBtn: { padding: '3px 8px', background: 'none', color: '#5a8a6a', border: '1px solid #5a8a6a', borderRadius: 4, cursor: 'pointer', fontSize: 14, lineHeight: 1 },
   cancelBtn: { padding: '3px 8px', background: 'none', color: '#c0392b', border: '1px solid #c0392b', borderRadius: 4, cursor: 'pointer', fontSize: 14, lineHeight: 1 },
   editBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#6b6560', fontSize: 14, padding: '2px 4px', borderRadius: 4 },
+  sourceBadge: { background: '#fdf9f3', color: '#6b6560', padding: '2px 8px', borderRadius: 10, fontSize: 12 },
 };
 
 export default function DashboardPage() {
   const categories = useCategories();
-  const navigate = useNavigate();
+  const sources = useSources();
+  const sourcesMap = useMemo(
+    () => Object.fromEntries(sources.map((s) => [s.key, s.display_name])),
+    [sources]
+  );
   const [month, setMonth] = useState<MonthValue>(getPrevMonth());
   const [txList, setTxList] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -173,6 +253,7 @@ export default function DashboardPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [cellEdit, setCellEdit] = useState<CellEdit | null>(null);
+  const [excludedTxIds, setExcludedTxIds] = useState<Set<number>>(new Set());
 
   const catMap = useMemo(
     () => Object.fromEntries(categories.map((c: Category) => [c.name, c])),
@@ -212,63 +293,69 @@ export default function DashboardPage() {
     fetchData(month);
     setActiveCat(null);
     setSelectedDay(null);
+    setExcludedTxIds(new Set());
+    setCellEdit(null);
   }, [month, fetchData]);
 
-  const EXCLUDED_CATEGORIES = ['Transfers', 'Income'];
-  const expenses = useMemo(
-    () => txList.filter((tx) => tx.amount < 0 && !EXCLUDED_CATEGORIES.includes(tx.category ?? '')),
-    [txList]
+  // Transactions that drive the section cards (full month or filtered to selected day)
+  const displayTxs = useMemo(
+    () => selectedDay ? txList.filter((tx) => tx.transaction_date === selectedDay) : txList,
+    [txList, selectedDay]
   );
 
-  const spendingTxs = useMemo(
-    () => txList.filter((tx) => !EXCLUDED_CATEGORIES.includes(tx.category ?? '')),
-    [txList]
+  // All checked non-Income, non-Transfers → feed the charts (refunds reduce net expense)
+  const chartExpenses = useMemo(
+    () => txList.filter((tx) =>
+      !['Transfers', 'Income'].includes(tx.category ?? '') &&
+      !excludedTxIds.has(tx.id)
+    ),
+    [txList, excludedTxIds]
   );
 
   const dailyData = useMemo(() => {
     const map: Record<number, number> = {};
-    spendingTxs.forEach((tx) => {
+    chartExpenses.forEach((tx) => {
       const day = parseInt(tx.transaction_date.split('-')[2], 10);
-      // expenses are negative amounts → add abs; refunds are positive → subtract
+      // Negative amounts are expenses (add); positive amounts are refunds (subtract)
       map[day] = (map[day] ?? 0) + (tx.amount < 0 ? Math.abs(tx.amount) : -tx.amount);
     });
     const lastDay = new Date(month.year, month.month, 0).getDate();
     return Array.from({ length: lastDay }, (_, i) => ({
       day: i + 1,
-      amount: parseFloat((map[i + 1] ?? 0).toFixed(2)),
+      amount: parseFloat((Math.max(0, map[i + 1] ?? 0)).toFixed(2)),
     }));
-  }, [spendingTxs, month]);
+  }, [chartExpenses, month]);
 
   const categoryData = useMemo(() => {
     const map: Record<string, number> = {};
-    expenses.forEach((tx) => {
+    chartExpenses.forEach((tx) => {
       const cat = tx.category ?? 'Uncategorized';
-      map[cat] = (map[cat] ?? 0) + Math.abs(tx.amount);
+      map[cat] = (map[cat] ?? 0) + (tx.amount < 0 ? Math.abs(tx.amount) : -tx.amount);
     });
-    const total = Object.values(map).reduce((s, v) => s + v, 0);
+    const total = Object.values(map).filter((v) => v > 0).reduce((s, v) => s + v, 0);
     return Object.entries(map)
-      .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)), pct: total > 0 ? (value / total) * 100 : 0 }))
+      .map(([name, value]) => ({ name, value: parseFloat(Math.max(0, value).toFixed(2)), pct: total > 0 ? (Math.max(0, value) / total) * 100 : 0 }))
       .sort((a, b) => b.value - a.value);
-  }, [expenses]);
+  }, [chartExpenses]);
 
   const totalSpent = useMemo(
-    () => spendingTxs.reduce((s, tx) => s - tx.amount, 0),
-    [spendingTxs]
+    () => -chartExpenses.reduce((s, tx) => s + Number(tx.amount), 0),
+    [chartExpenses]
   );
-  const largestExpense = useMemo(() => expenses.reduce((max, tx) => Math.max(max, Math.abs(tx.amount)), 0), [expenses]);
-
-  const activeCatTxs = useMemo(
-    () => activeCat ? spendingTxs.filter((tx) => (tx.category ?? 'Uncategorized') === activeCat) : [],
-    [activeCat, spendingTxs]
+  const largestExpense = useMemo(
+    () => chartExpenses.filter((tx) => Number(tx.amount) < 0).reduce((max, tx) => Math.max(max, Math.abs(Number(tx.amount))), 0),
+    [chartExpenses]
   );
 
-  const dayTxs = useMemo(
-    () => selectedDay ? spendingTxs.filter((tx) => tx.transaction_date === selectedDay) : [],
-    [selectedDay, spendingTxs]
-  );
+  // Debug: log to console to catch NaN sources
+  console.log('[Dashboard] totalSpent:', totalSpent, 'largestExpense:', largestExpense, 'chartExpenses sample:', chartExpenses.slice(0, 3).map(tx => ({ id: tx.id, amount: tx.amount, type: typeof tx.amount })));
 
   const monthLabel = new Date(month.year, month.month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const hasData = expenses.length > 0;
+  const hasData = txList.length > 0;
+
+  const selectedDayLabel = selectedDay
+    ? new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    : null;
 
   return (
     <div>
@@ -286,14 +373,14 @@ export default function DashboardPage() {
       {!isLoading && !fetchError && !hasData && (
         <div style={styles.emptyState}>
           <span style={{ fontSize: 40, opacity: 0.4 }}>📊</span>
-          <p style={styles.emptyTitle}>No expenses found for {monthLabel}</p>
+          <p style={styles.emptyTitle}>No transactions found for {monthLabel}</p>
           <p style={styles.emptyHint}>Use the month picker above to navigate to a month with transactions.</p>
         </div>
       )}
 
       {!isLoading && !fetchError && hasData && (
         <>
-          {/* Summary Card */}
+          {/* Summary Card — reflects checked expenses only */}
           <div style={styles.summaryCard}>
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Total Spent</span>
@@ -339,22 +426,31 @@ export default function DashboardPage() {
                   />
                   <Bar
                     dataKey="amount"
-                    fill="#c9a84c"
                     radius={[3, 3, 0, 0]}
                     maxBarSize={24}
                     cursor="pointer"
                     onClick={(data) => {
                       const dateStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(data.day).padStart(2, '0')}`;
                       setSelectedDay((prev) => prev === dateStr ? null : dateStr);
-                      setActiveCat(null);
+                      setCellEdit(null);
                     }}
-                  />
+                  >
+                    {dailyData.map((d) => {
+                      const dateStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+                      return (
+                        <Cell
+                          key={d.day}
+                          fill={selectedDay === dateStr ? '#a07830' : '#c9a84c'}
+                        />
+                      );
+                    })}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
             {/* Pie Chart */}
-            <div style={{ ...styles.card, flex: '1 1 44%', minWidth: 300, paddingRight: 12 }}>
+            <div style={{ ...styles.card, flex: '1 1 44%', minWidth: 300, paddingRight: 0 }}>
               <h2 style={styles.chartTitle}>By Category — {monthLabel}</h2>
               <div style={styles.pieRow}>
                 <div style={{ flex: '0 0 200px', position: 'relative' }}>
@@ -368,7 +464,7 @@ export default function DashboardPage() {
                         cy="50%"
                         innerRadius={55}
                         outerRadius={85}
-                        onClick={(entry) => { setActiveCat((prev) => prev === entry.name ? null : entry.name); setSelectedDay(null); }}
+                        onClick={(entry) => setActiveCat((prev) => prev === entry.name ? null : entry.name)}
                         style={{ cursor: 'pointer' }}
                       >
                         {categoryData.map((entry, i) => (
@@ -392,11 +488,8 @@ export default function DashboardPage() {
                   {categoryData.map((entry, i) => (
                     <div
                       key={entry.name}
-                      style={{
-                        ...styles.legendItem,
-                        opacity: activeCat && activeCat !== entry.name ? 0.5 : 1,
-                      }}
-                      onClick={() => { setActiveCat((prev) => prev === entry.name ? null : entry.name); setSelectedDay(null); }}
+                      style={{ ...styles.legendItem, opacity: activeCat && activeCat !== entry.name ? 0.5 : 1 }}
+                      onClick={() => setActiveCat((prev) => prev === entry.name ? null : entry.name)}
                     >
                       <span style={{ ...styles.legendDot, background: WARM_COLORS[i % WARM_COLORS.length] }} />
                       <span style={styles.legendName}>{entry.name}</span>
@@ -409,88 +502,55 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Day Detail Card */}
-          {selectedDay && (
-            <div style={styles.detailCard}>
-              <div style={styles.detailHeader}>
-                <span style={styles.detailTitle}>
-                  {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                  {' — '}{formatCurrency(dayTxs.reduce((s, tx) => s + (tx.amount < 0 ? Math.abs(tx.amount) : -tx.amount), 0))}
-                </span>
-                <button type="button" onClick={() => { setSelectedDay(null); setCellEdit(null); }} style={styles.dismissBtn}>×</button>
-              </div>
-              {dayTxs.length === 0 ? (
-                <div style={{ padding: '20px 16px', color: '#6b6560', fontSize: 13 }}>No expenses on this day.</div>
-              ) : (
-                <TxDetailTable txs={dayTxs} showDate={true} cellEdit={cellEdit} setCellEdit={setCellEdit} categories={categories} catMap={catMap} onSave={handleSave} />
-              )}
-            </div>
-          )}
+          {/* Section header */}
+          <div style={styles.sectionHeader}>
+            {selectedDayLabel ? (
+              <>
+                <span style={styles.sectionHeaderTitle}>{selectedDayLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedDay(null); setCellEdit(null); }}
+                  style={styles.clearDayBtn}
+                  title="Show full month"
+                >
+                  × Show all of {monthLabel}
+                </button>
+              </>
+            ) : (
+              <span style={styles.sectionHeaderTitle}>{monthLabel} — All Transactions</span>
+            )}
+          </div>
 
-          {/* Category Detail Card */}
-          {activeCat && (
-            <div style={styles.detailCard}>
-              <div style={styles.detailHeader}>
-                <span style={styles.detailTitle}>{activeCat} — {monthLabel}</span>
-                <button type="button" onClick={() => { setActiveCat(null); setCellEdit(null); }} style={styles.dismissBtn}>×</button>
-              </div>
-              <TxDetailTable txs={activeCatTxs} showDate={true} cellEdit={cellEdit} setCellEdit={setCellEdit} categories={categories} catMap={catMap} onSave={handleSave} />
-              <button
-                type="button"
-                onClick={() => {
-                  const range = monthToRange(month);
-                  const params = new URLSearchParams();
-                  if (activeCat) params.set('category', activeCat);
-                  params.set('date_from', range.from);
-                  params.set('date_to', range.to);
-                  navigate(`/transactions?${params.toString()}`);
-                }}
-                style={styles.viewAllLink}
-              >
-                View them in Transactions →
-              </button>
-            </div>
-          )}
-
-          {/* Daily Totals Table (default — nothing selected) */}
-          {!selectedDay && !activeCat && (
-            <div style={styles.detailCard}>
-              <div style={styles.detailHeader}>
-                <span style={styles.detailTitle}>Daily Totals — {monthLabel}</span>
-              </div>
-              <table style={styles.detailTable}>
-                <thead>
-                  <tr>
-                    {['Date', 'Day', 'Total Spent', 'Transactions'].map((h) => (
-                      <th key={h} style={styles.detailTh}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {dailyData.filter((d) => d.amount > 0).map((d) => {
-                    const dateStr = `${month.year}-${String(month.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
-                    const txCount = spendingTxs.filter((tx) => tx.transaction_date === dateStr).length;
-                    return (
-                      <tr
-                        key={d.day}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => { setSelectedDay(dateStr); setActiveCat(null); }}
-                      >
-                        <td style={styles.detailTd}>{dateStr}</td>
-                        <td style={{ ...styles.detailTd, color: '#6b6560' }}>
-                          {new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
-                        </td>
-                        <td style={{ ...styles.detailTd, color: '#c0392b', fontWeight: 500 }}>
-                          {formatCurrency(d.amount)}
-                        </td>
-                        <td style={{ ...styles.detailTd, color: '#6b6560' }}>{txCount}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* Expenses / Transfers / Income section cards */}
+          <div style={styles.sectionsCol}>
+            {SECTIONS.map((section) => {
+              const sectionTxs = displayTxs.filter(section.filter);
+              if (sectionTxs.length === 0) return null;
+              const sectionTotal = sectionTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0);
+              return (
+                <div key={section.label} style={styles.detailCard}>
+                  <div style={styles.detailHeader}>
+                    <span style={{ ...styles.detailTitle, color: section.accent }}>
+                      {section.label}
+                    </span>
+                    <span style={styles.sectionTotal}>{formatCurrency(sectionTotal)}</span>
+                  </div>
+                  <TxDetailTable
+                    txs={sectionTxs}
+                    showDate={!selectedDay}
+                    cellEdit={cellEdit}
+                    setCellEdit={setCellEdit}
+                    categories={categories}
+                    catMap={catMap}
+                    onSave={handleSave}
+                    excludedTxIds={excludedTxIds}
+                    setExcludedTxIds={setExcludedTxIds}
+                    sourcesMap={sourcesMap}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </>
       )}
     </div>
@@ -527,17 +587,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     textAlign: 'center',
   },
-  emptyTitle: {
-    margin: 0,
-    fontSize: 16,
-    fontWeight: 600,
-    color: '#2d2116',
-  },
-  emptyHint: {
-    margin: 0,
-    fontSize: 14,
-    color: '#6b6560',
-  },
+  emptyTitle: { margin: 0, fontSize: 16, fontWeight: 600, color: '#2d2116' },
+  emptyHint: { margin: 0, fontSize: 14, color: '#6b6560' },
   summaryCard: {
     display: 'flex',
     gap: 0,
@@ -549,37 +600,11 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 1px 4px rgba(45,33,22,0.06)',
     alignItems: 'center',
   },
-  summaryItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6b6560',
-    fontWeight: 500,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  },
-  summaryValue: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: '#c9a84c',
-  },
-  summaryDivider: {
-    width: 1,
-    height: 40,
-    background: '#e8e4de',
-    margin: '0 16px',
-  },
-  chartsRow: {
-    display: 'flex',
-    gap: 12,
-    marginBottom: 20,
-    flexWrap: 'wrap',
-  },
+  summaryItem: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, alignItems: 'center' },
+  summaryLabel: { fontSize: 12, color: '#6b6560', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' },
+  summaryValue: { fontSize: 22, fontWeight: 700, color: '#c9a84c' },
+  summaryDivider: { width: 1, height: 40, background: '#e8e4de', margin: '0 16px' },
+  chartsRow: { display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' },
   card: {
     background: '#fff',
     border: '1px solid #e8e4de',
@@ -587,50 +612,32 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 20,
     boxShadow: '0 1px 4px rgba(45,33,22,0.06)',
   },
-  chartTitle: {
-    margin: '0 0 16px',
-    fontSize: 15,
-    fontWeight: 600,
-    color: '#2d2116',
-  },
-  pieRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 16,
-  },
-  centerLabel: {
-    textAlign: 'center',
-    fontSize: 13,
-    fontWeight: 600,
-    color: '#2d2116',
-    marginTop: -12,
-  },
-  legend: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    overflowY: 'auto',
-    maxHeight: 220,
-    paddingRight: 8,
-  },
-  legendItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: 12,
-    padding: '2px 0',
-    cursor: 'pointer',
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
+  chartTitle: { margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: '#2d2116' },
+  pieRow: { display: 'flex', alignItems: 'center', gap: 16 },
+  centerLabel: { textAlign: 'center', fontSize: 13, fontWeight: 600, color: '#2d2116', marginTop: -12 },
+  legend: { flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 220, paddingRight: 8 },
+  legendItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '2px 0', cursor: 'pointer' },
+  legendDot: { width: 10, height: 10, borderRadius: '50%', flexShrink: 0 },
   legendName: { flex: 1, color: '#2d2116', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   legendPct: { color: '#6b6560', minWidth: 36, textAlign: 'right' },
   legendAmt: { color: '#2d2116', fontWeight: 500, minWidth: 64, textAlign: 'right' },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 12,
+  },
+  sectionHeaderTitle: { fontSize: 15, fontWeight: 600, color: '#2d2116' },
+  clearDayBtn: {
+    background: 'none',
+    border: '1px solid #e8e4de',
+    borderRadius: 4,
+    cursor: 'pointer',
+    color: '#6b6560',
+    fontSize: 12,
+    padding: '4px 10px',
+  },
+  sectionsCol: { display: 'flex', flexDirection: 'column', gap: 16 },
   detailCard: {
     background: '#fff',
     border: '1px solid #e8e4de',
@@ -646,79 +653,5 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid #e8e4de',
   },
   detailTitle: { fontSize: 15, fontWeight: 600, color: '#2d2116' },
-  dismissBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: 20,
-    cursor: 'pointer',
-    color: '#6b6560',
-    lineHeight: 1,
-    padding: '0 4px',
-  },
-  detailTable: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  detailTh: {
-    padding: '8px 16px',
-    textAlign: 'left',
-    background: '#faf8f4',
-    borderBottom: '1px solid #e8e4de',
-    fontWeight: 600,
-    color: '#6b6560',
-    fontSize: 12,
-  },
-  detailTd: {
-    padding: '10px 16px',
-    borderBottom: '1px solid #f3f0eb',
-    color: '#2d2116',
-  },
-  inlineSelect: {
-    padding: '3px 6px',
-    border: '1px solid #c9a84c',
-    borderRadius: 6,
-    fontSize: 12,
-    color: '#2d2116',
-    background: '#fff',
-    outline: 'none',
-    cursor: 'pointer',
-    minWidth: 130,
-  },
-  saveBtn: {
-    padding: '3px 8px',
-    background: 'none',
-    color: '#5a8a6a',
-    border: '1px solid #5a8a6a',
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: 14,
-    lineHeight: 1,
-  },
-  cancelBtn: {
-    padding: '3px 8px',
-    background: 'none',
-    color: '#c0392b',
-    border: '1px solid #c0392b',
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: 14,
-    lineHeight: 1,
-  },
-  editBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#6b6560',
-    fontSize: 14,
-    padding: '2px 4px',
-    borderRadius: 4,
-  },
-  viewAllLink: {
-    display: 'block',
-    padding: '12px 20px',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#c9a84c',
-    fontSize: 13,
-    fontWeight: 500,
-    textAlign: 'left',
-  },
+  sectionTotal: { fontSize: 14, fontWeight: 600, color: '#2d2116' },
 };
