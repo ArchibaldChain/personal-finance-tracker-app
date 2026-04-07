@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { getTransactionSummary, listTransactions, updateTransaction } from '../api/transactions';
-import type { TransactionSummary } from '../api/transactions';
+import { listTransactions, updateTransaction } from '../api/transactions';
 import AddTransactionModal from '../components/AddTransactionModal';
 import EditTransactionModal from '../components/EditTransactionModal';
 import { MonthValue } from '../components/MonthPicker';
@@ -19,13 +18,6 @@ const DEFAULT_FILTERS: TransactionFilters = {
   page_size: 50,
 };
 
-function getPrevMonth(): MonthValue {
-  const now = new Date();
-  const m = now.getMonth(); // 0-based
-  return m === 0
-    ? { year: now.getFullYear() - 1, month: 12 }
-    : { year: now.getFullYear(), month: m };
-}
 
 function monthToDateRange(m: MonthValue) {
   const from = `${m.year}-${String(m.month).padStart(2, '0')}-01`;
@@ -34,9 +26,6 @@ function monthToDateRange(m: MonthValue) {
   return { from, to };
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-}
 
 export default function TransactionsPage() {
   const categories = useCategories();
@@ -45,11 +34,9 @@ export default function TransactionsPage() {
   const location = useLocation();
   const [month, setMonth] = useState<MonthValue | null>(() => {
     const df = new URLSearchParams(location.search).get('date_from');
-    if (df) {
-      const [y, m] = df.split('-').map(Number);
-      return { year: y, month: m };
-    }
-    return getPrevMonth();
+    if (!df) return null;
+    const [y, m] = df.split('-').map(Number);
+    return { year: y, month: m };
   });
   const [filters, setFilters] = useState<TransactionFilters>(() => {
     const params = new URLSearchParams(location.search);
@@ -58,38 +45,19 @@ export default function TransactionsPage() {
     if (params.get('date_from')) {
       f.date_from = params.get('date_from')!;
       f.date_to = params.get('date_to')!;
-    } else {
-      const range = monthToDateRange(getPrevMonth());
-      f.date_from = range.from;
-      f.date_to = range.to;
     }
     return f;
   });
   const [data, setData] = useState<TransactionListResponse>({ items: [], total: 0, page: 1, page_size: 50 });
   const [isLoading, setIsLoading] = useState(false);
-  const [summary, setSummary] = useState<TransactionSummary>({ total_spent: 0, transaction_count: 0, largest_expense: 0 });
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
-
-  // Summary uses only filter fields relevant to aggregation (no page/sort)
-  const summaryFilters = (f: TransactionFilters): TransactionFilters => ({
-    search: f.search,
-    category: f.category,
-    source_type: f.source_type,
-    needs_review: f.needs_review,
-    date_from: f.date_from,
-    date_to: f.date_to,
-  });
 
   const fetchTransactions = useCallback(async (f: TransactionFilters) => {
     setIsLoading(true);
     try {
-      const [result, sum] = await Promise.all([
-        listTransactions(f),
-        getTransactionSummary(summaryFilters(f)),
-      ]);
+      const result = await listTransactions(f);
       setData(result);
-      setSummary(sum);
     } catch (err) {
       console.error(err);
     } finally {
@@ -139,24 +107,6 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      {/* Summary Card */}
-      <div style={styles.summaryCard}>
-        <div style={styles.summaryItem}>
-          <span style={styles.summaryLabel}>Total Spent</span>
-          <span style={styles.summaryValue}>{formatCurrency(summary.total_spent)}</span>
-        </div>
-        <div style={styles.summaryDivider} />
-        <div style={styles.summaryItem}>
-          <span style={styles.summaryLabel}>Transactions</span>
-          <span style={styles.summaryValue}>{summary.transaction_count.toLocaleString()}</span>
-        </div>
-        <div style={styles.summaryDivider} />
-        <div style={styles.summaryItem}>
-          <span style={styles.summaryLabel}>Largest Expense</span>
-          <span style={styles.summaryValue}>{formatCurrency(summary.largest_expense)}</span>
-        </div>
-      </div>
-
       <TransactionFiltersBar
         filters={filters}
         onChange={handleFiltersChange}
@@ -202,41 +152,3 @@ export default function TransactionsPage() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  summaryCard: {
-    display: 'flex',
-    gap: 0,
-    background: '#fff',
-    border: '1px solid #e8e4de',
-    borderRadius: 6,
-    padding: '16px 24px',
-    marginBottom: 20,
-    boxShadow: '0 1px 4px rgba(45,33,22,0.06)',
-    alignItems: 'center',
-  },
-  summaryItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6b6560',
-    fontWeight: 500,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  },
-  summaryValue: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: '#c9a84c',
-  },
-  summaryDivider: {
-    width: 1,
-    height: 40,
-    background: '#e8e4de',
-    margin: '0 16px',
-  },
-};

@@ -254,6 +254,15 @@ export default function DashboardPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [cellEdit, setCellEdit] = useState<CellEdit | null>(null);
   const [excludedTxIds, setExcludedTxIds] = useState<Set<number>>(new Set());
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  function toggleSection(label: string) {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label); else next.add(label);
+      return next;
+    });
+  }
 
   const catMap = useMemo(
     () => Object.fromEntries(categories.map((c: Category) => [c.name, c])),
@@ -297,11 +306,12 @@ export default function DashboardPage() {
     setCellEdit(null);
   }, [month, fetchData]);
 
-  // Transactions that drive the section cards (full month or filtered to selected day)
-  const displayTxs = useMemo(
-    () => selectedDay ? txList.filter((tx) => tx.transaction_date === selectedDay) : txList,
-    [txList, selectedDay]
-  );
+  // Transactions that drive the section cards (full month or filtered to selected day + active category)
+  const displayTxs = useMemo(() => {
+    let txs = selectedDay ? txList.filter((tx) => tx.transaction_date === selectedDay) : txList;
+    if (activeCat) txs = txs.filter((tx) => (tx.category ?? 'Uncategorized') === activeCat);
+    return txs;
+  }, [txList, selectedDay, activeCat]);
 
   // All checked non-Income, non-Transfers → feed the charts (refunds reduce net expense)
   const chartExpenses = useMemo(
@@ -342,6 +352,15 @@ export default function DashboardPage() {
     () => -chartExpenses.reduce((s, tx) => s + Number(tx.amount), 0),
     [chartExpenses]
   );
+
+  const totalIncome = useMemo(
+    () => txList
+      .filter((tx) => tx.category === 'Income' && !excludedTxIds.has(tx.id))
+      .reduce((s, tx) => s + Number(tx.amount), 0),
+    [txList, excludedTxIds]
+  );
+
+  const netIncome = useMemo(() => totalIncome - totalSpent, [totalIncome, totalSpent]);
   const largestExpense = useMemo(
     () => chartExpenses.filter((tx) => Number(tx.amount) < 0).reduce((max, tx) => Math.max(max, Math.abs(Number(tx.amount))), 0),
     [chartExpenses]
@@ -384,7 +403,17 @@ export default function DashboardPage() {
           <div style={styles.summaryCard}>
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Total Spent</span>
-              <span style={styles.summaryValue}>{formatCurrency(totalSpent)}</span>
+              <span style={{ ...styles.summaryValue, color: '#c0392b' }}>{formatCurrency(totalSpent)}</span>
+            </div>
+            <div style={styles.summaryDivider} />
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Total Income</span>
+              <span style={styles.summaryValue}>{formatCurrency(totalIncome)}</span>
+            </div>
+            <div style={styles.summaryDivider} />
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Net Income</span>
+              <span style={{ ...styles.summaryValue, color: netIncome >= 0 ? '#5a8a6a' : '#c0392b' }}>{formatCurrency(netIncome)}</span>
             </div>
             <div style={styles.summaryDivider} />
             <div style={styles.summaryItem}>
@@ -504,20 +533,18 @@ export default function DashboardPage() {
 
           {/* Section header */}
           <div style={styles.sectionHeader}>
-            {selectedDayLabel ? (
-              <>
-                <span style={styles.sectionHeaderTitle}>{selectedDayLabel}</span>
-                <button
-                  type="button"
-                  onClick={() => { setSelectedDay(null); setCellEdit(null); }}
-                  style={styles.clearDayBtn}
-                  title="Show full month"
-                >
-                  × Show all of {monthLabel}
-                </button>
-              </>
-            ) : (
-              <span style={styles.sectionHeaderTitle}>{monthLabel} — All Transactions</span>
+            <span style={styles.sectionHeaderTitle}>
+              {selectedDayLabel ?? monthLabel}
+            </span>
+            {selectedDay && (
+              <button type="button" onClick={() => { setSelectedDay(null); setCellEdit(null); }} style={styles.clearDayBtn}>
+                × All of {monthLabel}
+              </button>
+            )}
+            {activeCat && (
+              <button type="button" onClick={() => setActiveCat(null)} style={styles.clearDayBtn}>
+                × All categories
+              </button>
             )}
           </div>
 
@@ -526,27 +553,36 @@ export default function DashboardPage() {
             {SECTIONS.map((section) => {
               const sectionTxs = displayTxs.filter(section.filter);
               if (sectionTxs.length === 0) return null;
-              const sectionTotal = sectionTxs.reduce((s, tx) => s + Math.abs(tx.amount), 0);
+              const raw = sectionTxs.reduce((s, tx) => s + Number(tx.amount), 0);
+              const sectionTotal = section.label === 'Expenses' ? -raw : raw;
+              const collapsed = collapsedSections.has(section.label);
               return (
                 <div key={section.label} style={styles.detailCard}>
-                  <div style={styles.detailHeader}>
-                    <span style={{ ...styles.detailTitle, color: section.accent }}>
-                      {section.label}
-                    </span>
+                  <div
+                    style={{ ...styles.detailHeader, cursor: 'pointer' }}
+                    onClick={() => toggleSection(section.label)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: '#6b6560', fontSize: 12, transition: 'transform 0.15s', transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', display: 'inline-block' }}>▶</span>
+                      <span style={{ ...styles.detailTitle, color: section.accent }}>{section.label}</span>
+                      {activeCat && <span style={styles.activeCatBadge}>{activeCat}</span>}
+                    </div>
                     <span style={styles.sectionTotal}>{formatCurrency(sectionTotal)}</span>
                   </div>
-                  <TxDetailTable
-                    txs={sectionTxs}
-                    showDate={!selectedDay}
-                    cellEdit={cellEdit}
-                    setCellEdit={setCellEdit}
-                    categories={categories}
-                    catMap={catMap}
-                    onSave={handleSave}
-                    excludedTxIds={excludedTxIds}
-                    setExcludedTxIds={setExcludedTxIds}
-                    sourcesMap={sourcesMap}
-                  />
+                  {!collapsed && (
+                    <TxDetailTable
+                      txs={sectionTxs}
+                      showDate={!selectedDay}
+                      cellEdit={cellEdit}
+                      setCellEdit={setCellEdit}
+                      categories={categories}
+                      catMap={catMap}
+                      onSave={handleSave}
+                      excludedTxIds={excludedTxIds}
+                      setExcludedTxIds={setExcludedTxIds}
+                      sourcesMap={sourcesMap}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -654,4 +690,5 @@ const styles: Record<string, React.CSSProperties> = {
   },
   detailTitle: { fontSize: 15, fontWeight: 600, color: '#2d2116' },
   sectionTotal: { fontSize: 14, fontWeight: 600, color: '#2d2116' },
+  activeCatBadge: { fontSize: 11, fontWeight: 500, color: '#92400e', background: '#fef9ec', border: '1px solid #c9a84c', borderRadius: 10, padding: '1px 8px' },
 };
