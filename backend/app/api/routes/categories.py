@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -17,8 +17,11 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 
 @router.get("", response_model=CategoryListResponse)
-def list_categories(db: Session = Depends(get_db)) -> CategoryListResponse:
-    categories = category_service.list_categories(db)
+def list_categories(
+    ledger_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> CategoryListResponse:
+    categories = category_service.list_categories(db, ledger_id=ledger_id)
     return CategoryListResponse(
         categories=[CategoryRead.model_validate(c) for c in categories]
     )

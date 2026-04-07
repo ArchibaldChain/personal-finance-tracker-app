@@ -55,6 +55,9 @@ class TransactionRead(BaseModel):
     subcategory: str | None
     classification_confidence: float | None
     notes: str | None
+    ledger_id: int | None = None
+    created_by_user_id: int | None = None
+    updated_by_user_id: int | None = None
     is_deleted: bool
     created_at: datetime
     updated_at: datetime

@@ -13,6 +13,15 @@ class Transaction(Base):
     import_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("imports.id"), nullable=True
     )
+    ledger_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("ledgers.id"), nullable=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
     source_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "csv" | "manual"
     source_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -42,6 +51,15 @@ class Transaction(Base):
 
     import_: Mapped["Import | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Import", back_populates="transactions"
+    )
+    ledger: Mapped["Ledger | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Ledger", foreign_keys=[ledger_id]
+    )
+    created_by: Mapped["User | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "User", foreign_keys=[created_by_user_id]
+    )
+    updated_by: Mapped["User | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "User", foreign_keys=[updated_by_user_id]
     )
 
     __table_args__ = (

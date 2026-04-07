@@ -25,6 +25,7 @@ class CategoryRead(BaseModel):
     id: int
     name: str
     icon: str | None
+    ledger_id: int | None = None
     subcategories: list[SubcategoryRead]
 
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -19,10 +19,22 @@ class Import(Base):
     total_rows: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parsed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     failed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    ledger_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("ledgers.id"), nullable=True
+    )
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
 
     rows: Mapped[list["ImportRow"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "ImportRow", back_populates="import_", cascade="all, delete-orphan"
     )
     transactions: Mapped[list["Transaction"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Transaction", back_populates="import_"
+    )
+    ledger: Mapped["Ledger | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Ledger", foreign_keys=[ledger_id]
+    )
+    uploaded_by: Mapped["User | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "User", foreign_keys=[uploaded_by_user_id]
     )

@@ -14,12 +14,15 @@ import app.parsers  # noqa: F401
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Seed categories on startup
+    # Seed categories into the default ledger on startup
+    from app.models.user_model import Ledger
     from app.services.category_service import seed_categories
 
     db = _db_session.SessionLocal()
     try:
-        seed_categories(db)
+        default_ledger = db.query(Ledger).filter_by(is_default=True).first()
+        if default_ledger:
+            seed_categories(db, ledger_id=default_ledger.id)
     finally:
         db.close()
 

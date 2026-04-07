@@ -23,9 +23,16 @@ class Category(Base):
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     icon: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    ledger_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("ledgers.id"), nullable=True
+    )
 
     subcategories: Mapped[list[Subcategory]] = relationship(
         "Subcategory", back_populates="category", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("ledger_id", "name", name="uq_category_ledger_name"),
     )

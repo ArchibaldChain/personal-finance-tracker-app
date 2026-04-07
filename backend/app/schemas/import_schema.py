@@ -14,6 +14,8 @@ class ImportRead(BaseModel):
     total_rows: int | None
     parsed_rows: int
     failed_rows: int
+    ledger_id: int | None = None
+    uploaded_by_user_id: int | None = None
 
 
 class ImportListResponse(BaseModel):

@@ -228,6 +228,17 @@ CATEGORY_DATA: list[dict] = [
             {"name": "Investment Transfer", "icon": "📈"},
             {"name": "Cash Withdrawal", "icon": "💵"},
             {"name": "Internal Transfer", "icon": "🔄"},
+            {"name": "E-Transfer", "icon": "🔄"},
+        ],
+    },
+    {
+        "name": "Income",
+        "icon": "💸",
+        "subcategories": [
+            {"name": "Cashback", "icon": "💳"},
+            {"name": "Interest Income", "icon": "🏦"},
+            {"name": "Salary Income", "icon": "📈"},
+            {"name": "Other Income", "icon": "💵"},
         ],
     },
 ]
