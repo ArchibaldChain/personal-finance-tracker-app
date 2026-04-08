@@ -18,13 +18,14 @@ from app.services.classification.category_tree import build_category_tree
 from app.services.classification.simple_classifier import SimpleClassifier
 
 
-def create_import(db: Session, source_name: str, file_name: str) -> Import:
+def create_import(db: Session, source_name: str, file_name: str, ledger_id: int | None = None) -> Import:
     import_record = Import(
         source_name=source_name,
         file_name=file_name,
         status="pending",
         parsed_rows=0,
         failed_rows=0,
+        ledger_id=ledger_id,
     )
     db.add(import_record)
     db.commit()
@@ -163,6 +164,7 @@ def process_import(db: Session, import_id: int) -> Import:
                 classification_confidence=confidence,
                 notes=parsed.notes,
                 is_deleted=False,
+                ledger_id=import_record.ledger_id,
             )
             db.add(transaction)
 
@@ -211,5 +213,8 @@ def get_import(db: Session, import_id: int) -> Import | None:
     return db.query(Import).filter(Import.id == import_id).first()
 
 
-def list_imports(db: Session) -> list[Import]:
-    return db.query(Import).order_by(Import.uploaded_at.desc()).all()
+def list_imports(db: Session, ledger_id: int | None = None) -> list[Import]:
+    query = db.query(Import)
+    if ledger_id is not None:
+        query = query.filter(Import.ledger_id == ledger_id)
+    return query.order_by(Import.uploaded_at.desc()).all()

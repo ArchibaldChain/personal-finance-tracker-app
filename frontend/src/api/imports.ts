@@ -1,10 +1,11 @@
 import type { Import, ImportListResponse } from '../types';
 import client from './client';
 
-export async function uploadImport(file: File, sourceName: string): Promise<Import> {
+export async function uploadImport(file: File, sourceName: string, ledgerId?: number): Promise<Import> {
   const formData = new FormData();
   formData.append('source_name', sourceName);
   formData.append('file', file);
+  if (ledgerId != null) formData.append('ledger_id', String(ledgerId));
   const resp = await client.post<Import>('/imports', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
@@ -16,8 +17,10 @@ export async function processImport(id: number): Promise<Import> {
   return resp.data;
 }
 
-export async function listImports(): Promise<ImportListResponse> {
-  const resp = await client.get<ImportListResponse>('/imports');
+export async function listImports(ledgerId?: number): Promise<ImportListResponse> {
+  const params: Record<string, number> = {};
+  if (ledgerId != null) params.ledger_id = ledgerId;
+  const resp = await client.get<ImportListResponse>('/imports', { params });
   return resp.data;
 }
 

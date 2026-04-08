@@ -7,6 +7,7 @@ import { MonthValue } from '../components/MonthPicker';
 import Pagination from '../components/Pagination';
 import TransactionFiltersBar from '../components/TransactionFiltersBar';
 import TransactionTable from '../components/TransactionTable';
+import { useApp } from '../context/AppContext';
 import { useCategories } from '../hooks/useCategories';
 import { useUsedSources } from '../hooks/useSources';
 import type { Transaction, TransactionFilters, TransactionListResponse } from '../types';
@@ -28,6 +29,7 @@ function monthToDateRange(m: MonthValue) {
 
 
 export default function TransactionsPage() {
+  const { ledgerId } = useApp();
   const categories = useCategories();
   const sources = useUsedSources();
   const sourcesMap = Object.fromEntries(sources.map((s) => [s.key, s.display_name]));
@@ -56,14 +58,14 @@ export default function TransactionsPage() {
   const fetchTransactions = useCallback(async (f: TransactionFilters) => {
     setIsLoading(true);
     try {
-      const result = await listTransactions(f);
+      const result = await listTransactions({ ...f, ledger_id: ledgerId ?? undefined });
       setData(result);
     } catch (err) {
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ledgerId]);
 
   useEffect(() => {
     fetchTransactions(filters);

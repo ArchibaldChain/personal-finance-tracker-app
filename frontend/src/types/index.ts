@@ -1,3 +1,18 @@
+export interface User {
+  id: number;
+  display_name: string;
+  email: string;
+  avatar_url: string | null;
+}
+
+export interface LedgerRead {
+  id: number;
+  name: string;
+  base_currency: string;
+  is_default: boolean;
+  owner: User;
+}
+
 export interface Import {
   id: number;
   source_name: string;
@@ -7,6 +22,8 @@ export interface Import {
   total_rows: number | null;
   parsed_rows: number;
   failed_rows: number;
+  ledger_id: number | null;
+  uploaded_by_user_id: number | null;
 }
 
 export interface ImportListResponse {
@@ -17,6 +34,9 @@ export interface ImportListResponse {
 export interface Transaction {
   id: number;
   import_id: number | null;
+  ledger_id: number | null;
+  created_by_user_id: number | null;
+  updated_by_user_id: number | null;
   source_type: string;
   source_name: string | null;
   external_id: string | null;
@@ -69,6 +89,7 @@ export interface TransactionFilters {
   page_size?: number;
   date_from?: string;
   date_to?: string;
+  ledger_id?: number;
 }
 
 export interface Subcategory {
@@ -81,6 +102,7 @@ export interface Category {
   id: number;
   name: string;
   icon: string | null;
+  ledger_id: number | null;
   subcategories: Subcategory[];
 }
 

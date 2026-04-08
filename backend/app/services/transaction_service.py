@@ -35,8 +35,12 @@ def list_transactions(
     page_size: int = 50,
     date_from: date | None = None,
     date_to: date | None = None,
+    ledger_id: int | None = None,
 ) -> tuple[list[Transaction], int]:
     query = db.query(Transaction).filter(Transaction.is_deleted == False)  # noqa: E712
+
+    if ledger_id is not None:
+        query = query.filter(Transaction.ledger_id == ledger_id)
 
     if search:
         pattern = f"%{search}%"
@@ -93,8 +97,12 @@ def get_transaction_summary(
     needs_review: bool = False,
     date_from: date | None = None,
     date_to: date | None = None,
+    ledger_id: int | None = None,
 ) -> dict:
     query = db.query(Transaction).filter(Transaction.is_deleted == False)  # noqa: E712
+
+    if ledger_id is not None:
+        query = query.filter(Transaction.ledger_id == ledger_id)
 
     if search:
         pattern = f"%{search}%"

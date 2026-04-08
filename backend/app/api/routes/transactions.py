@@ -27,6 +27,7 @@ def list_transactions(
     page_size: int = Query(50, ge=1, le=200),
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
+    ledger_id: int | None = Query(None),
     db: Session = Depends(get_db),
 ) -> TransactionListResponse:
     items, total = transaction_service.list_transactions(
@@ -41,6 +42,7 @@ def list_transactions(
         page_size=page_size,
         date_from=date_from,
         date_to=date_to,
+        ledger_id=ledger_id,
     )
     return TransactionListResponse(
         items=[TransactionRead.model_validate(t) for t in items],
@@ -58,6 +60,7 @@ def get_summary(
     needs_review: bool = Query(False),
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
+    ledger_id: int | None = Query(None),
     db: Session = Depends(get_db),
 ) -> dict:
     return transaction_service.get_transaction_summary(
@@ -68,6 +71,7 @@ def get_summary(
         needs_review=needs_review,
         date_from=date_from,
         date_to=date_to,
+        ledger_id=ledger_id,
     )
 
 

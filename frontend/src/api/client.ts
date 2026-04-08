@@ -7,4 +7,15 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Auth token interceptor — no-op until Google Sign-In is connected.
+// When GSP is integrated: store the Firebase ID token in localStorage
+// under the key 'auth_token' and this interceptor will attach it automatically.
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export default client;

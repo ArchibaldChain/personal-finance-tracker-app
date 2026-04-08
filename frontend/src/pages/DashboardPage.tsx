@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { listTransactions, updateTransaction } from '../api/transactions';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
+import { useApp } from '../context/AppContext';
 import { useCategories } from '../hooks/useCategories';
 import { useSources } from '../hooks/useSources';
 import type { Category, Transaction } from '../types';
@@ -240,6 +241,7 @@ const detailStyles: Record<string, React.CSSProperties> = {
 };
 
 export default function DashboardPage() {
+  const { ledgerId } = useApp();
   const categories = useCategories();
   const sources = useSources();
   const sourcesMap = useMemo(
@@ -288,6 +290,7 @@ export default function DashboardPage() {
         page: 1,
         sort_by: 'transaction_date',
         sort_dir: 'asc',
+        ledger_id: ledgerId ?? undefined,
       });
       setTxList(result.items);
     } catch (err) {
@@ -296,7 +299,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [ledgerId]);
 
   useEffect(() => {
     fetchData(month);

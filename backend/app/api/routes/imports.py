@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -13,6 +13,7 @@ router = APIRouter(prefix="/imports", tags=["imports"])
 async def upload_import(
     source_name: str = Form(...),
     file: UploadFile = File(...),
+    ledger_id: int | None = Form(None),
     db: Session = Depends(get_db),
 ) -> ImportRead:
     # Validate the source name is a registered parser
@@ -25,7 +26,7 @@ async def upload_import(
     file_name = file.filename or "upload.csv"
 
     # Create the import record
-    import_record = import_service.create_import(db, source_name=source_name, file_name=file_name)
+    import_record = import_service.create_import(db, source_name=source_name, file_name=file_name, ledger_id=ledger_id)
 
     # Parse CSV to raw rows and store them
     try:
@@ -42,8 +43,11 @@ async def upload_import(
 
 
 @router.get("", response_model=ImportListResponse)
-def list_imports(db: Session = Depends(get_db)) -> ImportListResponse:
-    imports = import_service.list_imports(db)
+def list_imports(
+    ledger_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+) -> ImportListResponse:
+    imports = import_service.list_imports(db, ledger_id=ledger_id)
     return ImportListResponse(items=[ImportRead.model_validate(i) for i in imports], total=len(imports))
 
 

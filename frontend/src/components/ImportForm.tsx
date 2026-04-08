@@ -4,9 +4,10 @@ import { processImport, uploadImport } from '../api/imports';
 
 interface ImportFormProps {
   onSuccess: () => void;
+  ledgerId?: number;
 }
 
-export default function ImportForm({ onSuccess }: ImportFormProps) {
+export default function ImportForm({ onSuccess, ledgerId }: ImportFormProps) {
   const [sources, setSources] = useState<{ key: string; display_name: string }[]>([]);
   const [selectedSource, setSelectedSource] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -30,7 +31,7 @@ export default function ImportForm({ onSuccess }: ImportFormProps) {
     setIsLoading(true);
     setStatus(null);
     try {
-      const importRecord = await uploadImport(file, selectedSource);
+      const importRecord = await uploadImport(file, selectedSource, ledgerId);
       const processed = await processImport(importRecord.id);
       setStatus({
         type: 'success',

@@ -21,6 +21,7 @@ export async function listTransactions(
   if (filters.page_size) params.page_size = filters.page_size;
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
+  if (filters.ledger_id != null) params.ledger_id = filters.ledger_id;
   const resp = await client.get<TransactionListResponse>('/transactions', { params });
   return resp.data;
 }
@@ -39,6 +40,7 @@ export async function getTransactionSummary(filters: TransactionFilters = {}): P
   if (filters.needs_review) params.needs_review = true;
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
+  if (filters.ledger_id != null) params.ledger_id = filters.ledger_id;
   const resp = await client.get<TransactionSummary>('/transactions/summary', { params });
   return resp.data;
 }

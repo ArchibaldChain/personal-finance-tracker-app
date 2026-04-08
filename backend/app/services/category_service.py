@@ -14,16 +14,22 @@ def list_categories(db: Session, ledger_id: int | None = None) -> list[Category]
 
 
 def seed_categories(db: Session, ledger_id: int) -> None:
-    """Idempotent seed: inserts default categories/subcategories for a ledger if not present."""
-    if db.query(Category).filter(Category.ledger_id == ledger_id).count() > 0:
-        return
+    """Idempotent seed: inserts any missing default categories/subcategories for a ledger."""
+    existing_names = {
+        c.name
+        for c in db.query(Category).filter(Category.ledger_id == ledger_id).all()
+    }
 
+    added = False
     for cat_data in CATEGORY_DATA:
+        if cat_data["name"] in existing_names:
+            continue
         category = Category(
             name=cat_data["name"], icon=cat_data.get("icon"), ledger_id=ledger_id
         )
         db.add(category)
         db.flush()
+        added = True
 
         for sub_data in cat_data["subcategories"]:
             if isinstance(sub_data, str):
@@ -32,7 +38,8 @@ def seed_categories(db: Session, ledger_id: int) -> None:
                 sub_name, sub_icon = sub_data["name"], sub_data.get("icon")
             db.add(Subcategory(category_id=category.id, name=sub_name, icon=sub_icon))
 
-    db.commit()
+    if added:
+        db.commit()
 
 
 def create_category(db: Session, data: CategoryCreate) -> Category:

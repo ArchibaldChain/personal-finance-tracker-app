@@ -8,6 +8,7 @@ import {
   updateCategory,
   updateSubcategory,
 } from '../api/categories';
+import { useApp } from '../context/AppContext';
 import type { Category, Subcategory } from '../types';
 
 const PRESET_ICONS = [
@@ -157,6 +158,7 @@ function AddSubcategoryForm({ categoryId, onAdd }: AddSubcategoryFormProps) {
 // ---- Main Page ----
 
 export default function CategoriesPage() {
+  const { ledgerId } = useApp();
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -172,11 +174,11 @@ export default function CategoriesPage() {
   const selectedCategory = categories.find((c) => c.id === selectedId) ?? null;
 
   async function reload() {
-    const resp = await listCategories();
+    const resp = await listCategories(ledgerId ?? undefined);
     setCategories(resp.categories);
   }
 
-  useEffect(() => { reload().catch(console.error); }, []);
+  useEffect(() => { reload().catch(console.error); }, [ledgerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync edit fields when selection changes
   useEffect(() => {

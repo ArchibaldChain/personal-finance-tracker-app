@@ -2,19 +2,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { deleteImport, listImports } from '../api/imports';
 import ImportForm from '../components/ImportForm';
 import ImportHistoryTable from '../components/ImportHistoryTable';
+import { useApp } from '../context/AppContext';
 import type { Import } from '../types';
 
 export default function ImportPage() {
+  const { ledgerId } = useApp();
   const [imports, setImports] = useState<Import[]>([]);
 
   const fetchImports = useCallback(async () => {
     try {
-      const resp = await listImports();
+      const resp = await listImports(ledgerId ?? undefined);
       setImports(resp.items);
     } catch (err) {
       console.error(err);
     }
-  }, []);
+  }, [ledgerId]);
 
   useEffect(() => {
     fetchImports();
@@ -32,7 +34,7 @@ export default function ImportPage() {
 
   return (
     <div>
-      <ImportForm onSuccess={fetchImports} />
+      <ImportForm onSuccess={fetchImports} ledgerId={ledgerId ?? undefined} />
       <div style={{ marginTop: 32 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, color: '#2d2116', marginBottom: 12, marginTop: 0 }}>
           Import History

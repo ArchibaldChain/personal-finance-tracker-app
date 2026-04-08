@@ -1,8 +1,10 @@
 import type { Category, CategoryListResponse, Source, Subcategory } from '../types';
 import client from './client';
 
-export async function listCategories(): Promise<CategoryListResponse> {
-  const resp = await client.get<CategoryListResponse>('/categories');
+export async function listCategories(ledgerId?: number): Promise<CategoryListResponse> {
+  const resp = await client.get<CategoryListResponse>('/categories', {
+    params: ledgerId != null ? { ledger_id: ledgerId } : {},
+  });
   return resp.data;
 }
 
