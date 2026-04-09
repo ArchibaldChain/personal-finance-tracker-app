@@ -141,7 +141,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
             {COLUMNS.map((col) => (
               <th
                 key={col.key}
-                style={{ ...styles.th, cursor: col.sortable ? 'pointer' : 'default', width: col.key === '_edit' ? 80 : undefined }}
+                style={{ ...styles.th, cursor: col.sortable ? 'pointer' : 'default', width: col.key === '_edit' ? 80 : col.key === 'transaction_date' ? 140 : undefined }}
                 onClick={() => col.sortable && onSort(col.key)}
               >
                 {col.label}

@@ -27,23 +27,40 @@ const CAT_BADGE_COLORS = [
 ];
 
 function IconPicker({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
+  const [search, setSearch] = React.useState('');
+  const filtered = search.trim()
+    ? ALL_ICON_NAMES.filter((n) => n.toLowerCase().includes(search.toLowerCase()))
+    : ALL_ICON_NAMES;
+
   return (
-    <div style={styles.iconGrid}>
-      {ALL_ICON_NAMES.map((name) => (
-        <button
-          key={name}
-          type="button"
-          onClick={() => onChange(name)}
-          style={{
-            ...styles.iconBtn,
-            background: value === name ? '#fef9ec' : '#faf8f4',
-            border: value === name ? '2px solid #c9a84c' : '2px solid transparent',
-          }}
-          title={name}
-        >
-          <CategoryIcon name={name} size={18} color={value === name ? '#c9a84c' : '#6b6560'} />
-        </button>
-      ))}
+    <div>
+      <input
+        type="text"
+        placeholder="Search icons…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={styles.iconSearch}
+      />
+      <div style={styles.iconGrid}>
+        {filtered.length === 0 && (
+          <span style={{ fontSize: 12, color: '#aaa', padding: '4px 2px' }}>No icons found.</span>
+        )}
+        {filtered.map((name) => (
+          <button
+            key={name}
+            type="button"
+            onClick={() => onChange(name)}
+            style={{
+              ...styles.iconBtn,
+              background: value === name ? '#fef9ec' : '#faf8f4',
+              border: value === name ? '2px solid #c9a84c' : '2px solid transparent',
+            }}
+            title={name}
+          >
+            <CategoryIcon name={name} size={18} color={value === name ? '#c9a84c' : '#6b6560'} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -64,6 +81,16 @@ function PencilIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function GripIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="18" x2="20" y2="18" />
     </svg>
   );
 }
@@ -170,6 +197,9 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Right panel edit state
   const [editName, setEditName] = useState('');
@@ -188,17 +218,19 @@ export default function CategoriesPage() {
 
   useEffect(() => { reload().catch(console.error); }, [ledgerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync edit fields when selection changes
+  // Sync edit fields and reset editing mode when selection changes
   useEffect(() => {
     if (selectedCategory) {
       setEditName(selectedCategory.name);
       setEditIcon(selectedCategory.icon ?? '');
     }
+    setIsEditingCategory(false);
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSaveCategory() {
     if (!selectedCategory) return;
     await updateCategory(selectedCategory.id, { name: editName, icon: editIcon || null });
+    setIsEditingCategory(false);
     await reload();
   }
 
@@ -209,12 +241,33 @@ export default function CategoriesPage() {
     await reload();
   }
 
-  async function handleMove(index: number, direction: 'up' | 'down') {
+  function handleDragStart(index: number) {
+    setDragIndex(index);
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    setDragOverIndex(index);
+  }
+
+  async function handleDrop(index: number) {
+    if (dragIndex === null || dragIndex === index) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
     const newOrder = [...categories];
-    const swapIndex = direction === 'up' ? index - 1 : index + 1;
-    [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
+    const [moved] = newOrder.splice(dragIndex, 1);
+    newOrder.splice(index, 0, moved);
     setCategories(newOrder);
+    setDragIndex(null);
+    setDragOverIndex(null);
     await reorderCategories(newOrder.map((c) => c.id));
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDragOverIndex(null);
   }
 
   async function handleUpdateSubcategory(id: number, name: string, icon: string) {
@@ -260,12 +313,21 @@ export default function CategoriesPage() {
             return (
             <div
               key={cat.id}
+              draggable
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDrop={() => handleDrop(i)}
+              onDragEnd={handleDragEnd}
               style={{
                 ...styles.catRow,
-                background: selectedId === cat.id ? '#fef9ec' : '#fff',
+                background: dragOverIndex === i ? '#fef9ec' : selectedId === cat.id ? '#fef9ec' : '#fff',
+                opacity: dragIndex === i ? 0.4 : 1,
               }}
               onClick={() => { setSelectedId(cat.id); setIsAddingCategory(false); }}
             >
+              <span style={styles.dragHandle} title="Drag to reorder">
+                <GripIcon />
+              </span>
               <span style={{ ...styles.catIconBadge, background: color.bg }}>
                 <CategoryIcon name={cat.icon} size={18} color={color.text} />
               </span>
@@ -275,25 +337,7 @@ export default function CategoriesPage() {
               </div>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); handleMove(i, 'up'); }}
-                style={{ ...styles.iconActionBtn, opacity: i === 0 ? 0.2 : 1 }}
-                disabled={i === 0}
-                title="Move up"
-              >
-                ▲
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleMove(i, 'down'); }}
-                style={{ ...styles.iconActionBtn, opacity: i === categories.length - 1 ? 0.2 : 1 }}
-                disabled={i === categories.length - 1}
-                title="Move down"
-              >
-                ▼
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setSelectedId(cat.id); setIsAddingCategory(false); }}
+                onClick={(e) => { e.stopPropagation(); setSelectedId(cat.id); setIsAddingCategory(false); setIsEditingCategory(true); }}
                 style={styles.iconActionBtn}
                 title="Edit"
               >
@@ -346,9 +390,34 @@ export default function CategoriesPage() {
               <button type="button" onClick={() => setIsAddingCategory(false)} style={styles.cancelBtnLg} className="cat-btn-cancel">Cancel</button>
             </div>
           </form>
-        ) : selectedCategory ? (
+        ) : selectedCategory && !isEditingCategory ? (
           <div style={styles.detailContent}>
-            <h2 style={styles.detailHeading}>Category Details</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 16, borderBottom: '1px solid #e8e4de' }}>
+              <CategoryIcon name={selectedCategory.icon} size={22} color="#c9a84c" />
+              <h2 style={{ ...styles.detailHeading, borderBottom: 'none', paddingBottom: 0, margin: 0 }}>{selectedCategory.name}</h2>
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Subcategories</label>
+              <div style={styles.subList}>
+                {selectedCategory.subcategories.length === 0 && (
+                  <p style={{ margin: '10px 14px', fontSize: 13, color: '#aaa' }}>No subcategories yet.</p>
+                )}
+                {selectedCategory.subcategories.map((sub) => (
+                  <SubcategoryRow
+                    key={sub.id}
+                    sub={sub}
+                    onUpdate={handleUpdateSubcategory}
+                    onDelete={handleDeleteSubcategory}
+                  />
+                ))}
+                <AddSubcategoryForm categoryId={selectedCategory.id} onAdd={handleAddSubcategory} />
+              </div>
+            </div>
+          </div>
+        ) : selectedCategory && isEditingCategory ? (
+          <div style={styles.detailContent}>
+            <h2 style={styles.detailHeading}>Edit Category</h2>
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Category Icon</label>
@@ -364,24 +433,14 @@ export default function CategoriesPage() {
               />
             </div>
 
-            <div style={styles.fieldGroup}>
-              <label style={styles.fieldLabel}>Subcategories</label>
-              <div style={styles.subList}>
-                {selectedCategory.subcategories.map((sub) => (
-                  <SubcategoryRow
-                    key={sub.id}
-                    sub={sub}
-                    onUpdate={handleUpdateSubcategory}
-                    onDelete={handleDeleteSubcategory}
-                  />
-                ))}
-                <AddSubcategoryForm categoryId={selectedCategory.id} onAdd={handleAddSubcategory} />
-              </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={handleSaveCategory} style={styles.saveChangesBtn} className="cat-btn-primary">
+                Save Changes
+              </button>
+              <button type="button" onClick={() => setIsEditingCategory(false)} style={styles.cancelBtnLg} className="cat-btn-cancel">
+                Cancel
+              </button>
             </div>
-
-            <button type="button" onClick={handleSaveCategory} style={styles.saveChangesBtn} className="cat-btn-primary">
-              Save Changes
-            </button>
           </div>
         ) : (
           <div style={styles.placeholder}>
@@ -413,6 +472,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   leftScroll: {
     flex: 1,
+    maxHeight: 'calc(100vh - 180px)',
+    overflowY: 'auto',
   },
   catRow: {
     display: 'flex',
@@ -452,6 +513,14 @@ const styles: Record<string, React.CSSProperties> = {
   subCountPill: {
     fontSize: 11,
     color: '#6b6560',
+  },
+  dragHandle: {
+    color: '#bbb',
+    cursor: 'grab',
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+    padding: '0 2px',
   },
   iconActionBtn: {
     background: 'none',
@@ -611,6 +680,17 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#6b6560',
     textAlign: 'center',
   },
+  iconSearch: {
+    width: '100%',
+    padding: '6px 10px',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    fontSize: 13,
+    color: '#2d2116',
+    outline: 'none',
+    marginBottom: 8,
+    boxSizing: 'border-box' as const,
+  },
   iconGrid: {
     display: 'flex',
     flexWrap: 'wrap' as const,
@@ -652,5 +732,12 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     cursor: 'pointer',
     fontSize: 13,
+  },
+  detailHeadingRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+    borderBottom: '1px solid #e8e4de',
   },
 };
