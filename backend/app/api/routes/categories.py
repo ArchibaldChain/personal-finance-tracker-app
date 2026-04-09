@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -16,6 +17,10 @@ from app.services import category_service
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
+class ReorderRequest(BaseModel):
+    ordered_ids: list[int]
+
+
 @router.get("", response_model=CategoryListResponse)
 def list_categories(
     ledger_id: int | None = Query(default=None),
@@ -25,6 +30,11 @@ def list_categories(
     return CategoryListResponse(
         categories=[CategoryRead.model_validate(c) for c in categories]
     )
+
+
+@router.post("/reorder", status_code=204)
+def reorder_categories(data: ReorderRequest, db: Session = Depends(get_db)) -> None:
+    category_service.reorder_categories(db, data.ordered_ids)
 
 
 @router.post("", response_model=CategoryRead, status_code=201)

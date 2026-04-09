@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import CategoryIcon from './CategoryIcon';
 import type { Category, Transaction, TransactionFilters } from '../types';
 
 interface TransactionTableProps {
@@ -199,14 +200,14 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                       >
                         <option value="">— None —</option>
                         {categories.map((c) => (
-                          <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
+                          <option key={c.id} value={c.name}>{c.name}</option>
                         ))}
                       </select>
                     ) : (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {displayCat && colors ? (
                           <span style={{ ...styles.categoryBadge, background: colors.bg, color: colors.text }}>
-                            {icon && <span style={{ marginRight: 3 }}>{icon}</span>}
+                            {icon && <span style={{ marginRight: 4, display: 'inline-flex', verticalAlign: 'middle' }}><CategoryIcon name={icon} size={12} color={colors.text} /></span>}
                             {displayCat}
                           </span>
                         ) : (
@@ -245,7 +246,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                       >
                         <option value="">— None —</option>
                         {pendingSubcats.map((s) => (
-                          <option key={s.id} value={s.name}>{s.icon} {s.name}</option>
+                          <option key={s.id} value={s.name}>{s.name}</option>
                         ))}
                       </select>
                     ) : (

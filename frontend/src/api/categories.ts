@@ -42,6 +42,10 @@ export async function deleteSubcategory(id: number): Promise<void> {
   await client.delete(`/categories/subcategories/${id}`);
 }
 
+export async function reorderCategories(orderedIds: number[]): Promise<void> {
+  await client.post('/categories/reorder', { ordered_ids: orderedIds });
+}
+
 export async function listSources(): Promise<Source[]> {
   const resp = await client.get<{ sources: Source[] }>('/sources');
   return resp.data.sources;

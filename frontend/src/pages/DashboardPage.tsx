@@ -12,11 +12,25 @@ import {
   YAxis,
 } from 'recharts';
 import { listTransactions, updateTransaction } from '../api/transactions';
+import CategoryIcon from '../components/CategoryIcon';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
 import { useApp } from '../context/AppContext';
 import { useCategories } from '../hooks/useCategories';
 import { useSources } from '../hooks/useSources';
 import type { Category, Transaction } from '../types';
+
+const CAT_BADGE_COLORS = [
+  { bg: '#fef9ec', text: '#92400e' },
+  { bg: '#fee2e2', text: '#c0392b' },
+  { bg: '#f0fdf4', text: '#5a8a6a' },
+  { bg: '#fff7ed', text: '#9a3412' },
+  { bg: '#f3e8ff', text: '#6b21a8' },
+  { bg: '#ecfdf5', text: '#065f46' },
+  { bg: '#fef3c7', text: '#78350f' },
+  { bg: '#ffe4e6', text: '#9f1239' },
+  { bg: '#e0f2fe', text: '#075985' },
+  { bg: '#fdf2f8', text: '#86198f' },
+];
 
 interface CellEdit {
   txId: number;
@@ -77,6 +91,8 @@ interface TxDetailTableProps {
   setCellEdit: React.Dispatch<React.SetStateAction<CellEdit | null>>;
   categories: Category[];
   catMap: Record<string, Category>;
+  catIconMap: Record<string, string>;
+  catColorMap: Record<string, { bg: string; text: string }>;
   onSave: () => void;
   excludedTxIds: Set<number>;
   setExcludedTxIds: React.Dispatch<React.SetStateAction<Set<number>>>;
@@ -84,7 +100,7 @@ interface TxDetailTableProps {
 }
 
 function TxDetailTable({
-  txs, showDate, cellEdit, setCellEdit, categories, catMap, onSave,
+  txs, showDate, cellEdit, setCellEdit, categories, catMap, catIconMap, catColorMap, onSave,
   excludedTxIds, setExcludedTxIds, sourcesMap,
 }: TxDetailTableProps) {
   function openCategoryEdit(tx: Transaction, e: React.MouseEvent) {
@@ -176,10 +192,15 @@ function TxDetailTable({
                 {isEditing && cellEdit.openStep === 'category' ? (
                   <select autoFocus defaultValue="" onChange={(e) => { e.stopPropagation(); handleCategorySelect(tx, e.target.value); }} onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)} onClick={(e) => e.stopPropagation()} style={detailStyles.select}>
                     <option value="">— None —</option>
-                    {categories.map((c) => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
+                    {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
                   </select>
+                ) : displayCat && catColorMap[displayCat] ? (
+                  <span style={{ ...detailStyles.catBadge, background: catColorMap[displayCat].bg, color: catColorMap[displayCat].text }}>
+                    <CategoryIcon name={catIconMap[displayCat]} size={12} color={catColorMap[displayCat].text} />
+                    {displayCat}
+                  </span>
                 ) : (
-                  <span style={{ color: displayCat ? '#2d2116' : '#c8c4be' }}>{displayCat || '—'}</span>
+                  <span style={{ color: '#c8c4be' }}>—</span>
                 )}
               </td>
 
@@ -191,7 +212,7 @@ function TxDetailTable({
                 {isEditing && cellEdit.openStep === 'subcategory' ? (
                   <select autoFocus defaultValue="" onChange={(e) => { e.stopPropagation(); handleSubcategorySelect(e.target.value); }} onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)} onClick={(e) => e.stopPropagation()} style={detailStyles.select}>
                     <option value="">— None —</option>
-                    {pendingSubcats.map((s) => <option key={s.id} value={s.name}>{s.icon} {s.name}</option>)}
+                    {pendingSubcats.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
                 ) : (
                   displaySub || '—'
@@ -232,6 +253,7 @@ function TxDetailTable({
 const detailStyles: Record<string, React.CSSProperties> = {
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
   th: { padding: '8px 16px', textAlign: 'left', background: '#faf8f4', borderBottom: '1px solid #e8e4de', fontWeight: 600, color: '#6b6560', fontSize: 12 },
+  catBadge: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 500 },
   td: { padding: '10px 16px', borderBottom: '1px solid #f3f0eb', color: '#2d2116' },
   select: { padding: '3px 6px', border: '1px solid #c9a84c', borderRadius: 6, fontSize: 12, color: '#2d2116', background: '#fff', outline: 'none', cursor: 'pointer', minWidth: 130 },
   saveBtn: { padding: '3px 8px', background: 'none', color: '#5a8a6a', border: '1px solid #5a8a6a', borderRadius: 4, cursor: 'pointer', fontSize: 14, lineHeight: 1 },
@@ -268,6 +290,18 @@ export default function DashboardPage() {
 
   const catMap = useMemo(
     () => Object.fromEntries(categories.map((c: Category) => [c.name, c])),
+    [categories]
+  );
+
+  const catIconMap = useMemo(
+    () => Object.fromEntries(categories.map((c: Category) => [c.name, c.icon ?? ''])),
+    [categories]
+  );
+
+  const catColorMap = useMemo(
+    () => Object.fromEntries(
+      categories.map((c: Category, i: number) => [c.name, CAT_BADGE_COLORS[i % CAT_BADGE_COLORS.length]])
+    ),
     [categories]
   );
 
@@ -580,6 +614,8 @@ export default function DashboardPage() {
                       setCellEdit={setCellEdit}
                       categories={categories}
                       catMap={catMap}
+                      catIconMap={catIconMap}
+                      catColorMap={catColorMap}
                       onSave={handleSave}
                       excludedTxIds={excludedTxIds}
                       setExcludedTxIds={setExcludedTxIds}

@@ -5,37 +5,43 @@ import {
   deleteCategory,
   deleteSubcategory,
   listCategories,
+  reorderCategories,
   updateCategory,
   updateSubcategory,
 } from '../api/categories';
+import CategoryIcon, { ALL_ICON_NAMES } from '../components/CategoryIcon';
 import { useApp } from '../context/AppContext';
 import type { Category, Subcategory } from '../types';
 
-const PRESET_ICONS = [
-  '🍽️','🍿','🛒','🛍️','🚌','🚗','✈️','🏠','💡','📱',
-  '🏥','💆','🎬','📚','🐾','💻','🏋️','🎁','🧧','📦',
-  '💸','☕','🧋','🍔','🥡','🥪','🍷','🏬','🚕','🚲',
-  '🅿️','🚆','⛽','🔧','🏨','🎡','⚡','💧','🔥','🌐',
-  '💊','🩺','🦷','✂️','💄','💅','🎮','📺','🎟️','🎨',
-  '🎓','🔌','💰','🧴','👕','👟','👜','🏦','📈','💳',
+const CAT_BADGE_COLORS = [
+  { bg: '#fef9ec', text: '#92400e' },
+  { bg: '#fee2e2', text: '#c0392b' },
+  { bg: '#f0fdf4', text: '#5a8a6a' },
+  { bg: '#fff7ed', text: '#9a3412' },
+  { bg: '#f3e8ff', text: '#6b21a8' },
+  { bg: '#ecfdf5', text: '#065f46' },
+  { bg: '#fef3c7', text: '#78350f' },
+  { bg: '#ffe4e6', text: '#9f1239' },
+  { bg: '#e0f2fe', text: '#075985' },
+  { bg: '#fdf2f8', text: '#86198f' },
 ];
 
 function IconPicker({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
   return (
     <div style={styles.iconGrid}>
-      {PRESET_ICONS.map((icon) => (
+      {ALL_ICON_NAMES.map((name) => (
         <button
-          key={icon}
+          key={name}
           type="button"
-          onClick={() => onChange(icon)}
+          onClick={() => onChange(name)}
           style={{
             ...styles.iconBtn,
-            background: value === icon ? '#fef9ec' : '#faf8f4',
-            border: value === icon ? '2px solid #c9a84c' : '2px solid transparent',
+            background: value === name ? '#fef9ec' : '#faf8f4',
+            border: value === name ? '2px solid #c9a84c' : '2px solid transparent',
           }}
-          title={icon}
+          title={name}
         >
-          {icon}
+          <CategoryIcon name={name} size={18} color={value === name ? '#c9a84c' : '#6b6560'} />
         </button>
       ))}
     </div>
@@ -98,7 +104,9 @@ function SubcategoryRow({ sub, onUpdate, onDelete }: SubcategoryRowProps) {
 
   return (
     <div style={styles.subRow}>
-      <span style={styles.subIconBadge}>{sub.icon || '•'}</span>
+      <span style={styles.subIconBadge}>
+        <CategoryIcon name={sub.icon} size={14} color="#6b6560" />
+      </span>
       <span style={styles.subName}>{sub.name}</span>
       <button type="button" onClick={() => setEditing(true)} style={styles.iconActionBtn} title="Edit">
         <PencilIcon />
@@ -201,6 +209,14 @@ export default function CategoriesPage() {
     await reload();
   }
 
+  async function handleMove(index: number, direction: 'up' | 'down') {
+    const newOrder = [...categories];
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
+    setCategories(newOrder);
+    await reorderCategories(newOrder.map((c) => c.id));
+  }
+
   async function handleUpdateSubcategory(id: number, name: string, icon: string) {
     await updateSubcategory(id, { name, icon: icon || null });
     await reload();
@@ -239,7 +255,9 @@ export default function CategoriesPage() {
       {/* Left Panel */}
       <div style={styles.leftPanel}>
         <div style={styles.leftScroll}>
-          {categories.map((cat) => (
+          {categories.map((cat, i) => {
+            const color = CAT_BADGE_COLORS[i % CAT_BADGE_COLORS.length];
+            return (
             <div
               key={cat.id}
               style={{
@@ -248,11 +266,31 @@ export default function CategoriesPage() {
               }}
               onClick={() => { setSelectedId(cat.id); setIsAddingCategory(false); }}
             >
-              <span style={styles.catIconBadge}>{cat.icon || '📦'}</span>
+              <span style={{ ...styles.catIconBadge, background: color.bg }}>
+                <CategoryIcon name={cat.icon} size={18} color={color.text} />
+              </span>
               <div style={styles.catInfo}>
                 <span style={styles.catName}>{cat.name}</span>
                 <span style={styles.subCountPill}>{cat.subcategories.length} subcategories</span>
               </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleMove(i, 'up'); }}
+                style={{ ...styles.iconActionBtn, opacity: i === 0 ? 0.2 : 1 }}
+                disabled={i === 0}
+                title="Move up"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleMove(i, 'down'); }}
+                style={{ ...styles.iconActionBtn, opacity: i === categories.length - 1 ? 0.2 : 1 }}
+                disabled={i === categories.length - 1}
+                title="Move down"
+              >
+                ▼
+              </button>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setSelectedId(cat.id); setIsAddingCategory(false); }}
@@ -270,7 +308,8 @@ export default function CategoriesPage() {
                 <TrashIcon />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
         <button
           type="button"
@@ -374,8 +413,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   leftScroll: {
     flex: 1,
-    overflowY: 'auto',
-    maxHeight: 600,
   },
   catRow: {
     display: 'flex',

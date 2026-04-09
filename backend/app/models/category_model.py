@@ -28,6 +28,7 @@ class Category(Base):
     ledger_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ledgers.id"), nullable=True
     )
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     subcategories: Mapped[list[Subcategory]] = relationship(
         "Subcategory", back_populates="category", cascade="all, delete-orphan"
