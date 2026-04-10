@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { listTransactions, updateTransaction } from '../api/transactions';
 import CategoryIcon from '../components/CategoryIcon';
+import EditTransactionModal from '../components/EditTransactionModal';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
 import { useApp } from '../context/AppContext';
 import { useCategories } from '../hooks/useCategories';
@@ -79,6 +80,15 @@ function monthToRange(m: MonthValue) {
   return { from, to };
 }
 
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 }
@@ -94,13 +104,14 @@ interface TxDetailTableProps {
   catIconMap: Record<string, string>;
   catColorMap: Record<string, { bg: string; text: string }>;
   onSave: () => void;
+  onEditTx: (tx: Transaction) => void;
   excludedTxIds: Set<number>;
   setExcludedTxIds: React.Dispatch<React.SetStateAction<Set<number>>>;
   sourcesMap: Record<string, string>;
 }
 
 function TxDetailTable({
-  txs, showDate, cellEdit, setCellEdit, categories, catMap, catIconMap, catColorMap, onSave,
+  txs, showDate, cellEdit, setCellEdit, categories, catMap, catIconMap, catColorMap, onSave, onEditTx,
   excludedTxIds, setExcludedTxIds, sourcesMap,
 }: TxDetailTableProps) {
   function openCategoryEdit(tx: Transaction, e: React.MouseEvent) {
@@ -239,7 +250,9 @@ function TxDetailTable({
                     <button type="button" onClick={() => setCellEdit(null)} style={detailStyles.cancelBtn} title="Cancel">✕</button>
                   </div>
                 ) : (
-                  <button type="button" onClick={(e) => openCategoryEdit(tx, e)} style={detailStyles.editBtn} title="Edit category">✎</button>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onEditTx(tx); }} style={detailStyles.editBtn} title="Edit transaction">
+                    <PencilIcon />
+                  </button>
                 )}
               </td>
             </tr>
@@ -277,6 +290,7 @@ export default function DashboardPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [cellEdit, setCellEdit] = useState<CellEdit | null>(null);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [excludedTxIds, setExcludedTxIds] = useState<Set<number>>(new Set());
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
@@ -617,6 +631,7 @@ export default function DashboardPage() {
                       catIconMap={catIconMap}
                       catColorMap={catColorMap}
                       onSave={handleSave}
+                      onEditTx={setSelectedTx}
                       excludedTxIds={excludedTxIds}
                       setExcludedTxIds={setExcludedTxIds}
                       sourcesMap={sourcesMap}
@@ -628,6 +643,13 @@ export default function DashboardPage() {
           </div>
         </>
       )}
+
+      <EditTransactionModal
+        transaction={selectedTx}
+        onClose={() => setSelectedTx(null)}
+        onSuccess={() => { setSelectedTx(null); fetchData(month); }}
+        categories={categories}
+      />
     </div>
   );
 }
