@@ -157,7 +157,7 @@ function TxDetailTable({
               onChange={(e) => toggleAll(e.target.checked)}
             />
           </th>
-          {headers.slice(1).map((h) => <th key={h} style={detailStyles.th}>{h}</th>)}
+          {headers.slice(1).map((h) => <th key={h} style={{ ...detailStyles.th, width: h === 'Date' ? 110 : undefined }}>{h}</th>)}
         </tr>
       </thead>
       <tbody>

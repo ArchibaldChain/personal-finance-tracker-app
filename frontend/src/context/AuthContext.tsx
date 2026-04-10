@@ -20,13 +20,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   //   - check localStorage for a saved token on init
   //   - replace signIn with Firebase signInWithPopup → store token + userId
   //   - replace signOut with Firebase signOut() + clear storage
-  const [activeUserId, setActiveUserId] = useState<number | null>(null);
+  const [activeUserId, setActiveUserId] = useState<number | null>(() => {
+    const saved = localStorage.getItem('activeUserId');
+    return saved ? Number(saved) : null;
+  });
 
   function signIn(userId: number) {
+    localStorage.setItem('activeUserId', String(userId));
     setActiveUserId(userId);
   }
 
   function signOut() {
+    localStorage.removeItem('activeUserId');
     setActiveUserId(null);
   }
 
