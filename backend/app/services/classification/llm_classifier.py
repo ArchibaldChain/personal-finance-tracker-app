@@ -3,6 +3,7 @@ import logging
 
 from app.services.classification.base import BaseClassifier
 from app.services.classification.cache import get_cached, set_cached
+from app.services.classification.utils import resolve_transaction_type as _resolve_transaction_type
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ Rules:
 Response format:
 {"subcategory_index": <int or -1>, "confidence": <float 0.0-1.0>}"""
 
-_FALLBACK: dict = {"category": None, "subcategory": None, "confidence": 0.0}
+_FALLBACK: dict = {"transaction_type": None, "category": None, "subcategory": None, "confidence": 0.0}
 
 
 class LLMClassifier(BaseClassifier):
@@ -66,7 +67,12 @@ class LLMClassifier(BaseClassifier):
         self._model = model
         self._temperature = temperature
 
-    def classify(self, description: str, category_tree: dict[str, list[str]]) -> dict:
+    def classify(
+        self,
+        description: str,
+        category_tree: dict[str, list[str]],
+        category_type_map: dict[str, str] | None = None,
+    ) -> dict:
         cached = get_cached(description, category_tree)
         if cached is not None:
             return cached
@@ -76,9 +82,9 @@ class LLMClassifier(BaseClassifier):
 
         try:
             if self._should_use_two_pass(category_tree):
-                result = self._classify_two_pass(description, category_tree)
+                result = self._classify_two_pass(description, category_tree, category_type_map)
             else:
-                result = self._classify_single_pass(description, category_tree)
+                result = self._classify_single_pass(description, category_tree, category_type_map)
         except Exception as e:
             logger.warning("LLM classification failed for %r: %s", description, e)
             result = _FALLBACK
@@ -94,7 +100,10 @@ class LLMClassifier(BaseClassifier):
         )
 
     def _classify_single_pass(
-        self, description: str, category_tree: dict[str, list[str]]
+        self,
+        description: str,
+        category_tree: dict[str, list[str]],
+        category_type_map: dict[str, str] | None = None,
     ) -> dict:
         categories_list = list(category_tree.keys())
         user_prompt = (
@@ -104,10 +113,13 @@ class LLMClassifier(BaseClassifier):
             f"Return the JSON object now."
         )
         raw = self._call_llm(_SYSTEM_PROMPT, user_prompt)
-        return self._validate_and_resolve(raw, category_tree, categories_list)
+        return self._validate_and_resolve(raw, category_tree, categories_list, category_type_map)
 
     def _classify_two_pass(
-        self, description: str, category_tree: dict[str, list[str]]
+        self,
+        description: str,
+        category_tree: dict[str, list[str]],
+        category_type_map: dict[str, str] | None = None,
     ) -> dict:
         categories_list = list(category_tree.keys())
 
@@ -125,6 +137,7 @@ class LLMClassifier(BaseClassifier):
             return _FALLBACK
         resolved_category = categories_list[cat_idx]
         confidence1 = max(0.0, min(1.0, float(raw1.get("confidence", 0.0))))
+        transaction_type = _resolve_transaction_type(resolved_category, category_type_map)
 
         # Pass 2 — pick subcategory within resolved category
         subcats = category_tree[resolved_category]
@@ -139,19 +152,20 @@ class LLMClassifier(BaseClassifier):
             raw2 = self._call_llm(_SYSTEM_PROMPT_PASS2, pass2_prompt)
         except Exception as e:
             logger.warning("LLM pass 2 failed for %r: %s", description, e)
-            return {"category": resolved_category, "subcategory": None, "confidence": confidence1 * 0.5}
+            return {"transaction_type": transaction_type, "category": resolved_category, "subcategory": None, "confidence": confidence1 * 0.5}
 
         sub_idx = raw2.get("subcategory_index")
         confidence2 = max(0.0, min(1.0, float(raw2.get("confidence", 0.0))))
 
         if not isinstance(sub_idx, int):
-            return {"category": resolved_category, "subcategory": None, "confidence": confidence1 * 0.5}
+            return {"transaction_type": transaction_type, "category": resolved_category, "subcategory": None, "confidence": confidence1 * 0.5}
         if sub_idx == -1:
-            return {"category": resolved_category, "subcategory": None, "confidence": confidence1 * confidence2}
+            return {"transaction_type": transaction_type, "category": resolved_category, "subcategory": None, "confidence": confidence1 * confidence2}
         if sub_idx < 0 or sub_idx >= len(subcats):
-            return {"category": resolved_category, "subcategory": None, "confidence": confidence1 * 0.5}
+            return {"transaction_type": transaction_type, "category": resolved_category, "subcategory": None, "confidence": confidence1 * 0.5}
 
         return {
+            "transaction_type": transaction_type,
             "category": resolved_category,
             "subcategory": subcats[sub_idx],
             "confidence": confidence1 * confidence2,
@@ -174,6 +188,7 @@ class LLMClassifier(BaseClassifier):
         raw_response: dict,
         category_tree: dict[str, list[str]],
         categories_list: list[str],
+        category_type_map: dict[str, str] | None = None,
     ) -> dict:
         confidence = max(0.0, min(1.0, float(raw_response.get("confidence", 0.0))))
 
@@ -183,16 +198,18 @@ class LLMClassifier(BaseClassifier):
 
         resolved_category = categories_list[cat_idx]
         subcats = category_tree[resolved_category]
+        transaction_type = _resolve_transaction_type(resolved_category, category_type_map)
 
         sub_idx = raw_response.get("subcategory_index")
         if not isinstance(sub_idx, int):
-            return {"category": resolved_category, "subcategory": None, "confidence": confidence * 0.5}
+            return {"transaction_type": transaction_type, "category": resolved_category, "subcategory": None, "confidence": confidence * 0.5}
         if sub_idx == -1:
-            return {"category": resolved_category, "subcategory": None, "confidence": confidence}
+            return {"transaction_type": transaction_type, "category": resolved_category, "subcategory": None, "confidence": confidence}
         if sub_idx < 0 or sub_idx >= len(subcats):
-            return {"category": resolved_category, "subcategory": None, "confidence": confidence * 0.5}
+            return {"transaction_type": transaction_type, "category": resolved_category, "subcategory": None, "confidence": confidence * 0.5}
 
         return {
+            "transaction_type": transaction_type,
             "category": resolved_category,
             "subcategory": subcats[sub_idx],
             "confidence": confidence,

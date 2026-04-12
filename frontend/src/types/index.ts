@@ -47,6 +47,7 @@ export interface Transaction {
   merchant_raw: string | null;
   merchant_normalized: string | null;
   description: string | null;
+  transaction_type: string | null;
   category: string | null;
   subcategory: string | null;
   classification_confidence: number | null;
@@ -102,6 +103,7 @@ export interface Category {
   id: number;
   name: string;
   icon: string | null;
+  transaction_type: string | null;
   ledger_id: number | null;
   subcategories: Subcategory[];
 }

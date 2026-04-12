@@ -85,6 +85,38 @@ function PencilIcon() {
   );
 }
 
+const TYPE_OPTIONS = [
+  { value: 'expense',  label: 'Expense' },
+  { value: 'income',   label: 'Income' },
+  { value: 'transfer', label: 'Transfer' },
+];
+
+function TypeSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {TYPE_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          style={{
+            padding: '6px 16px',
+            borderRadius: 6,
+            border: value === opt.value ? '2px solid #c9a84c' : '2px solid #e8e4de',
+            background: value === opt.value ? '#fef9ec' : '#fff',
+            color: value === opt.value ? '#92400e' : '#6b6560',
+            fontWeight: value === opt.value ? 600 : 400,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function GripIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -200,14 +232,26 @@ export default function CategoriesPage() {
   const [isEditingCategory, setIsEditingCategory] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
+
+  function toggleType(type: string) {
+    setCollapsedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
 
   // Right panel edit state
   const [editName, setEditName] = useState('');
   const [editIcon, setEditIcon] = useState('');
+  const [editType, setEditType] = useState('expense');
 
   // New category form state
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('');
+  const [newType, setNewType] = useState('expense');
 
   const selectedCategory = categories.find((c) => c.id === selectedId) ?? null;
 
@@ -223,13 +267,14 @@ export default function CategoriesPage() {
     if (selectedCategory) {
       setEditName(selectedCategory.name);
       setEditIcon(selectedCategory.icon ?? '');
+      setEditType(selectedCategory.transaction_type ?? 'expense');
     }
     setIsEditingCategory(false);
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSaveCategory() {
     if (!selectedCategory) return;
-    await updateCategory(selectedCategory.id, { name: editName, icon: editIcon || null });
+    await updateCategory(selectedCategory.id, { name: editName, icon: editIcon || null, transaction_type: editType });
     setIsEditingCategory(false);
     await reload();
   }
@@ -289,9 +334,10 @@ export default function CategoriesPage() {
   async function handleCreateCategory(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
-    const created = await createCategory({ name: newName.trim(), icon: newIcon || null });
+    const created = await createCategory({ name: newName.trim(), icon: newIcon || null, transaction_type: newType });
     setNewName('');
     setNewIcon('');
+    setNewType('expense');
     setIsAddingCategory(false);
     await reload();
     setSelectedId(created.id);
@@ -308,52 +354,121 @@ export default function CategoriesPage() {
       {/* Left Panel */}
       <div style={styles.leftPanel}>
         <div style={styles.leftScroll}>
-          {categories.map((cat, i) => {
-            const color = CAT_BADGE_COLORS[i % CAT_BADGE_COLORS.length];
-            return (
-            <div
-              key={cat.id}
-              draggable
-              onDragStart={() => handleDragStart(i)}
-              onDragOver={(e) => handleDragOver(e, i)}
-              onDrop={() => handleDrop(i)}
-              onDragEnd={handleDragEnd}
-              style={{
-                ...styles.catRow,
-                background: dragOverIndex === i ? '#fef9ec' : selectedId === cat.id ? '#fef9ec' : '#fff',
-                opacity: dragIndex === i ? 0.4 : 1,
-              }}
-              onClick={() => { setSelectedId(cat.id); setIsAddingCategory(false); }}
-            >
-              <span style={styles.dragHandle} title="Drag to reorder">
-                <GripIcon />
-              </span>
-              <span style={{ ...styles.catIconBadge, background: color.bg }}>
-                <CategoryIcon name={cat.icon} size={18} color={color.text} />
-              </span>
-              <div style={styles.catInfo}>
-                <span style={styles.catName}>{cat.name}</span>
-                <span style={styles.subCountPill}>{cat.subcategories.length} subcategories</span>
-              </div>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setSelectedId(cat.id); setIsAddingCategory(false); setIsEditingCategory(true); }}
-                style={styles.iconActionBtn}
-                title="Edit"
-              >
-                <PencilIcon />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
-                style={{ ...styles.iconActionBtn, color: '#c0392b' }}
-                title="Delete"
-              >
-                <TrashIcon />
-              </button>
-            </div>
-            );
-          })}
+          {(() => {
+            const TYPE_ORDER = ['expense', 'income', 'transfer'] as const;
+            const TYPE_LABELS: Record<string, string> = { expense: 'Expense', income: 'Income', transfer: 'Transfer' };
+            const grouped: Record<string, Category[]> = { expense: [], income: [], transfer: [], _other: [] };
+            categories.forEach((cat) => {
+              const t = cat.transaction_type;
+              if (t === 'expense' || t === 'income' || t === 'transfer') grouped[t].push(cat);
+              else grouped._other.push(cat);
+            });
+
+            const nodes: React.ReactNode[] = [];
+            TYPE_ORDER.forEach((type) => {
+              if (grouped[type].length === 0) return;
+              const isCollapsed = collapsedTypes.has(type);
+              nodes.push(
+                <div key={`divider-${type}`} style={{ ...styles.typeDivider, cursor: 'pointer' }} onClick={() => toggleType(type)}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 10 }}>{isCollapsed ? '▶' : '▼'}</span>
+                    {TYPE_LABELS[type]}
+                  </span>
+                </div>
+              );
+              if (isCollapsed) return;
+              grouped[type].forEach((cat) => {
+                const i = categories.indexOf(cat);
+                const color = CAT_BADGE_COLORS[i % CAT_BADGE_COLORS.length];
+                nodes.push(
+                  <div
+                    key={cat.id}
+                    draggable
+                    onDragStart={() => handleDragStart(i)}
+                    onDragOver={(e) => handleDragOver(e, i)}
+                    onDrop={() => handleDrop(i)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      ...styles.catRow,
+                      background: dragOverIndex === i ? '#fef9ec' : selectedId === cat.id ? '#fef9ec' : '#fff',
+                      opacity: dragIndex === i ? 0.4 : 1,
+                    }}
+                    onClick={() => { setSelectedId(cat.id); setIsAddingCategory(false); }}
+                  >
+                    <span style={styles.dragHandle} title="Drag to reorder">
+                      <GripIcon />
+                    </span>
+                    <span style={{ ...styles.catIconBadge, background: color.bg }}>
+                      <CategoryIcon name={cat.icon} size={18} color={color.text} />
+                    </span>
+                    <div style={styles.catInfo}>
+                      <span style={styles.catName}>{cat.name}</span>
+                      <span style={styles.subCountPill}>{cat.subcategories.length} subcategories</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setSelectedId(cat.id); setIsAddingCategory(false); setIsEditingCategory(true); }}
+                      style={styles.iconActionBtn}
+                      title="Edit"
+                    >
+                      <PencilIcon />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
+                      style={{ ...styles.iconActionBtn, color: '#c0392b' }}
+                      title="Delete"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                );
+              });
+            });
+            if (grouped._other.length > 0) {
+              const isCollapsed = collapsedTypes.has('_other');
+              nodes.push(
+                <div key="divider-other" style={{ ...styles.typeDivider, cursor: 'pointer' }} onClick={() => toggleType('_other')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 10 }}>{isCollapsed ? '▶' : '▼'}</span>
+                    Other
+                  </span>
+                </div>
+              );
+              if (!isCollapsed) grouped._other.forEach((cat) => {
+                const i = categories.indexOf(cat);
+                const color = CAT_BADGE_COLORS[i % CAT_BADGE_COLORS.length];
+                nodes.push(
+                  <div
+                    key={cat.id}
+                    draggable
+                    onDragStart={() => handleDragStart(i)}
+                    onDragOver={(e) => handleDragOver(e, i)}
+                    onDrop={() => handleDrop(i)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      ...styles.catRow,
+                      background: dragOverIndex === i ? '#fef9ec' : selectedId === cat.id ? '#fef9ec' : '#fff',
+                      opacity: dragIndex === i ? 0.4 : 1,
+                    }}
+                    onClick={() => { setSelectedId(cat.id); setIsAddingCategory(false); }}
+                  >
+                    <span style={styles.dragHandle} title="Drag to reorder"><GripIcon /></span>
+                    <span style={{ ...styles.catIconBadge, background: color.bg }}>
+                      <CategoryIcon name={cat.icon} size={18} color={color.text} />
+                    </span>
+                    <div style={styles.catInfo}>
+                      <span style={styles.catName}>{cat.name}</span>
+                      <span style={styles.subCountPill}>{cat.subcategories.length} subcategories</span>
+                    </div>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedId(cat.id); setIsAddingCategory(false); setIsEditingCategory(true); }} style={styles.iconActionBtn} title="Edit"><PencilIcon /></button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }} style={{ ...styles.iconActionBtn, color: '#c0392b' }} title="Delete"><TrashIcon /></button>
+                  </div>
+                );
+              });
+            }
+            return nodes;
+          })()}
         </div>
         <button
           type="button"
@@ -384,6 +499,10 @@ export default function CategoriesPage() {
                 autoFocus
                 required
               />
+            </div>
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Transaction Type</label>
+              <TypeSelector value={newType} onChange={setNewType} />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" style={styles.saveChangesBtn} className="cat-btn-primary">Create Category</button>
@@ -433,6 +552,11 @@ export default function CategoriesPage() {
               />
             </div>
 
+            <div style={styles.fieldGroup}>
+              <label style={styles.fieldLabel}>Transaction Type</label>
+              <TypeSelector value={editType} onChange={setEditType} />
+            </div>
+
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={handleSaveCategory} style={styles.saveChangesBtn} className="cat-btn-primary">
                 Save Changes
@@ -474,6 +598,17 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     maxHeight: 'calc(100vh - 180px)',
     overflowY: 'auto',
+  },
+  typeDivider: {
+    padding: '6px 14px',
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    color: '#a89880',
+    background: '#faf8f4',
+    borderBottom: '1px solid #e8e4de',
+    borderTop: '1px solid #e8e4de',
   },
   catRow: {
     display: 'flex',

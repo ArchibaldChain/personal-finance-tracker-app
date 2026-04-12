@@ -14,7 +14,7 @@ from app.models.transaction_model import Transaction
 from app.parsers import registry
 from app.services import category_service
 from app.services.classification import get_classifier
-from app.services.classification.category_tree import build_category_tree
+from app.services.classification.category_tree import build_category_tree, build_category_type_map
 from app.services.classification.simple_classifier import SimpleClassifier
 
 
@@ -81,12 +81,17 @@ def process_import(db: Session, import_id: int) -> Import:
     # SimpleClassifier runs first (free, instant); LLM is the fallback.
     classifier = None
     category_tree: dict[str, list[str]] = {}
+    category_type_map: dict[str, str] = {}
     settings = get_settings()
     if settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
         classifier = get_classifier()
-        category_tree = build_category_tree(category_service.list_categories(db))
+        all_categories = category_service.list_categories(db)
+        category_tree = build_category_tree(all_categories)
+        category_type_map = build_category_type_map(all_categories)
     elif settings.CLASSIFICATION_ENABLED:
-        category_tree = build_category_tree(category_service.list_categories(db))
+        all_categories = category_service.list_categories(db)
+        category_tree = build_category_tree(all_categories)
+        category_type_map = build_category_type_map(all_categories)
 
     pre_classifier = SimpleClassifier() if category_tree else None
     logger.info(
@@ -106,6 +111,7 @@ def process_import(db: Session, import_id: int) -> Import:
         try:
             parsed = parser.parse_row(raw)
 
+            transaction_type: str | None = None
             category: str | None = None
             subcategory: str | None = None
             confidence: float | None = None
@@ -121,28 +127,30 @@ def process_import(db: Session, import_id: int) -> Import:
                 if desc:
                     # Try rule-based classifier first
                     if pre_classifier:
-                        result = pre_classifier.classify(desc, category_tree)
+                        result = pre_classifier.classify(desc, category_tree, category_type_map)
                         if result["confidence"] > 0.0:
+                            transaction_type = result["transaction_type"]
                             category = result["category"]
                             subcategory = result["subcategory"]
                             confidence = result["confidence"]
                             classifier_model = "simple"
                             logger.debug(
-                                "pre_classifier hit: %r -> %s / %s",
-                                desc, category, subcategory,
+                                "pre_classifier hit: %r -> %s / %s / %s",
+                                desc, transaction_type, category, subcategory,
                             )
 
                     # Fall back to LLM if no rule matched
                     if confidence is None and classifier:
                         logger.debug("pre_classifier miss, calling LLM for: %r", desc)
-                        result = classifier.classify(desc, category_tree)
+                        result = classifier.classify(desc, category_tree, category_type_map)
+                        transaction_type = result["transaction_type"]
                         category = result["category"]
                         subcategory = result["subcategory"]
                         confidence = result["confidence"]
                         classifier_model = classifier._model
                         logger.debug(
-                            "llm classifier: %r -> %s / %s (confidence=%.2f)",
-                            desc, category, subcategory, confidence or 0.0,
+                            "llm classifier: %r -> %s / %s / %s (confidence=%.2f)",
+                            desc, transaction_type, category, subcategory, confidence or 0.0,
                         )
 
             # Extension point: deduplication check on external_id can go here.
@@ -159,6 +167,7 @@ def process_import(db: Session, import_id: int) -> Import:
                 merchant_raw=parsed.merchant_raw,
                 merchant_normalized=parsed.merchant_raw,  # raw used as initial normalized value
                 description=parsed.description,
+                transaction_type=transaction_type,
                 category=category,
                 subcategory=subcategory,
                 classification_confidence=confidence,

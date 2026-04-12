@@ -1,6 +1,7 @@
 import logging
 
 from app.services.classification.base import BaseClassifier
+from app.services.classification.utils import resolve_transaction_type as _resolve_transaction_type
 from app.utils import get_logger
 
 logger = get_logger(__name__, level=logging.WARNING)
@@ -59,7 +60,12 @@ class SimpleClassifier(BaseClassifier):
         # ----------------------------------------------------------------
     ]
 
-    def classify(self, description: str, category_tree: dict[str, list[str]]) -> dict:
+    def classify(
+        self,
+        description: str,
+        category_tree: dict[str, list[str]],
+        category_type_map: dict[str, str] | None = None,
+    ) -> dict:
         desc = description.lower()
         logger.debug("classifying: %r", description)
 
@@ -71,11 +77,17 @@ class SimpleClassifier(BaseClassifier):
                         "rule match: keyword=%r -> %s / %s",
                         matched_kw, category, subcategory,
                     )
-                    return {"category": category, "subcategory": subcategory, "confidence": 1.0}
+                    transaction_type = _resolve_transaction_type(category, category_type_map)
+                    return {
+                        "transaction_type": transaction_type,
+                        "category": category,
+                        "subcategory": subcategory,
+                        "confidence": 1.0,
+                    }
                 logger.warning(
                     "rule matched keyword=%r -> %s / %s but not found in category_tree",
-                    matched_kw, category, subcategory, 
+                    matched_kw, category, subcategory,
                 )
 
         logger.warning("no rule matched for: %r", description)
-        return {"category": None, "subcategory": None, "confidence": 0.0}
+        return {"transaction_type": None, "category": None, "subcategory": None, "confidence": 0.0}

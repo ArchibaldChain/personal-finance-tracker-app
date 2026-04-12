@@ -8,12 +8,12 @@ export async function listCategories(ledgerId?: number): Promise<CategoryListRes
   return resp.data;
 }
 
-export async function createCategory(data: { name: string; icon?: string | null }): Promise<Category> {
+export async function createCategory(data: { name: string; icon?: string | null; transaction_type: string }): Promise<Category> {
   const resp = await client.post<Category>('/categories', data);
   return resp.data;
 }
 
-export async function updateCategory(id: number, data: { name?: string; icon?: string | null }): Promise<Category> {
+export async function updateCategory(id: number, data: { name?: string; icon?: string | null; transaction_type?: string }): Promise<Category> {
   const resp = await client.patch<Category>(`/categories/${id}`, data);
   return resp.data;
 }

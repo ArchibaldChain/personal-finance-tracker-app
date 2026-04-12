@@ -1,11 +1,12 @@
 # Default category and subcategory data — sourced from docs/default_category.md
-# Used by category_service.seed_categories() to populate the DB at startup.
+# Used by category_service.seed_categories() to populate a new ledger's categories.
 # icon values are Lucide icon name strings (https://lucide.dev/icons/).
 # subcategories is a list of {"name": str, "icon": str} dicts.
 
 CATEGORY_DATA: list[dict] = [
     {
         "name": "Food",
+        "transaction_type": "expense",
         "icon": "UtensilsCrossed",
         "subcategories": [
             {"name": "Restaurant", "icon": "UtensilsCrossed"},
@@ -16,6 +17,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Snack",
+        "transaction_type": "expense",
         "icon": "Cookie",
         "subcategories": [
             {"name": "Coffee / Tea", "icon": "Coffee"},
@@ -27,6 +29,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Groceries",
+        "transaction_type": "expense",
         "icon": "ShoppingCart",
         "subcategories": [
             {"name": "Walmart", "icon": "Store"},
@@ -38,6 +41,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Shopping",
+        "transaction_type": "expense",
         "icon": "ShoppingBag",
         "subcategories": [
             {"name": "Clothes", "icon": "Shirt"},
@@ -50,6 +54,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Transportation",
+        "transaction_type": "expense",
         "icon": "Bus",
         "subcategories": [
             {"name": "Public Transit", "icon": "Bus"},
@@ -61,6 +66,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Car",
+        "transaction_type": "expense",
         "icon": "Car",
         "subcategories": [
             {"name": "Fuel", "icon": "Fuel"},
@@ -73,6 +79,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Travel",
+        "transaction_type": "expense",
         "icon": "Plane",
         "subcategories": [
             {"name": "Flights", "icon": "Plane"},
@@ -84,6 +91,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Housing",
+        "transaction_type": "expense",
         "icon": "House",
         "subcategories": [
             {"name": "Rent", "icon": "House"},
@@ -96,6 +104,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Utilities",
+        "transaction_type": "expense",
         "icon": "Zap",
         "subcategories": [
             {"name": "Electricity", "icon": "Zap"},
@@ -108,6 +117,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Phone & Internet",
+        "transaction_type": "expense",
         "icon": "Smartphone",
         "subcategories": [
             {"name": "Mobile Plan", "icon": "Smartphone"},
@@ -118,6 +128,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Health",
+        "transaction_type": "expense",
         "icon": "HeartPulse",
         "subcategories": [
             {"name": "Pharmacy OTC", "icon": "Pill"},
@@ -130,6 +141,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Personal Care",
+        "transaction_type": "expense",
         "icon": "Sparkles",
         "subcategories": [
             {"name": "Haircut", "icon": "Scissors"},
@@ -141,6 +153,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Entertainment",
+        "transaction_type": "expense",
         "icon": "Clapperboard",
         "subcategories": [
             {"name": "Movies", "icon": "Clapperboard"},
@@ -152,6 +165,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Education",
+        "transaction_type": "expense",
         "icon": "GraduationCap",
         "subcategories": [
             {"name": "Tuition", "icon": "GraduationCap"},
@@ -162,6 +176,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Pet",
+        "transaction_type": "expense",
         "icon": "PawPrint",
         "subcategories": [
             {"name": "Pet Food", "icon": "Fish"},
@@ -173,6 +188,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Electronics",
+        "transaction_type": "expense",
         "icon": "Laptop",
         "subcategories": [
             {"name": "Computer", "icon": "Laptop"},
@@ -184,6 +200,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Sports",
+        "transaction_type": "expense",
         "icon": "Dumbbell",
         "subcategories": [
             {"name": "Gym", "icon": "Dumbbell"},
@@ -194,6 +211,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Gifts & Donations",
+        "transaction_type": "expense",
         "icon": "Gift",
         "subcategories": [
             {"name": "Birthday Gift", "icon": "Cake"},
@@ -204,6 +222,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Red Envelope",
+        "transaction_type": "expense",
         "icon": "Mail",
         "subcategories": [
             {"name": "Family", "icon": "Users"},
@@ -214,6 +233,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Other",
+        "transaction_type": "expense",
         "icon": "CircleEllipsis",
         "subcategories": [
             {"name": "Uncategorized", "icon": "CircleHelp"},
@@ -222,6 +242,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Transfers",
+        "transaction_type": "transfer",
         "icon": "ArrowLeftRight",
         "subcategories": [
             {"name": "Credit Card Payment", "icon": "CreditCard"},
@@ -234,6 +255,7 @@ CATEGORY_DATA: list[dict] = [
     },
     {
         "name": "Income",
+        "transaction_type": "income",
         "icon": "CircleDollarSign",
         "subcategories": [
             {"name": "Cashback", "icon": "CreditCard"},

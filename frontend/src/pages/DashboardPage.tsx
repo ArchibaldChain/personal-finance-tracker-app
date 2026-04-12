@@ -50,18 +50,17 @@ const SECTIONS: { label: string; accent: string; filter: (tx: Transaction) => bo
   {
     label: 'Expenses',
     accent: '#c0392b',
-    // All non-Income, non-Transfers — positive amounts here are refunds that reduce net expense
-    filter: (tx) => !['Transfers', 'Income'].includes(tx.category ?? ''),
+    filter: (tx) => tx.transaction_type === 'expense',
   },
   {
     label: 'Transfers',
     accent: '#3a7a8a',
-    filter: (tx) => tx.category === 'Transfers',
+    filter: (tx) => tx.transaction_type === 'transfer',
   },
   {
     label: 'Income',
     accent: '#5a8a6a',
-    filter: (tx) => tx.category === 'Income',
+    filter: (tx) => tx.transaction_type === 'income',
   },
 ];
 
@@ -364,12 +363,9 @@ export default function DashboardPage() {
     return txs;
   }, [txList, selectedDay, activeCat]);
 
-  // All checked non-Income, non-Transfers → feed the charts (refunds reduce net expense)
+  // All checked expense-type transactions → feed the charts (refunds reduce net expense)
   const chartExpenses = useMemo(
-    () => txList.filter((tx) =>
-      !['Transfers', 'Income'].includes(tx.category ?? '') &&
-      !excludedTxIds.has(tx.id)
-    ),
+    () => txList.filter((tx) => tx.transaction_type === 'expense' && !excludedTxIds.has(tx.id)),
     [txList, excludedTxIds]
   );
 
@@ -406,7 +402,7 @@ export default function DashboardPage() {
 
   const totalIncome = useMemo(
     () => txList
-      .filter((tx) => tx.category === 'Income' && !excludedTxIds.has(tx.id))
+      .filter((tx) => tx.transaction_type === 'income' && !excludedTxIds.has(tx.id))
       .reduce((s, tx) => s + Number(tx.amount), 0),
     [txList, excludedTxIds]
   );

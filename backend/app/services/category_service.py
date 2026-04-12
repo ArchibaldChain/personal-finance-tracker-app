@@ -30,11 +30,12 @@ def seed_categories(db: Session, ledger_id: int) -> None:
     dirty = False
     for position, cat_data in enumerate(CATEGORY_DATA):
         canonical_icon = cat_data.get("icon")
+        canonical_type = cat_data.get("transaction_type")
         if cat_data["name"] not in existing:
             # Insert new category
             category = Category(
                 name=cat_data["name"], icon=canonical_icon, ledger_id=ledger_id,
-                sort_order=position,
+                sort_order=position, transaction_type=canonical_type,
             )
             db.add(category)
             db.flush()
@@ -46,10 +47,13 @@ def seed_categories(db: Session, ledger_id: int) -> None:
                     sub_name, sub_icon = sub_data["name"], sub_data.get("icon")
                 db.add(Subcategory(category_id=category.id, name=sub_name, icon=sub_icon))
         else:
-            # Sync icon on existing category if it differs
+            # Sync icon and transaction_type on existing category if they differ
             category = existing[cat_data["name"]]
             if category.icon != canonical_icon:
                 category.icon = canonical_icon
+                dirty = True
+            if canonical_type is not None and category.transaction_type != canonical_type:
+                category.transaction_type = canonical_type
                 dirty = True
             # Sync subcategory icons
             sub_map = {s.name: s for s in category.subcategories}
@@ -67,7 +71,7 @@ def seed_categories(db: Session, ledger_id: int) -> None:
 def create_category(db: Session, data: CategoryCreate) -> Category:
     if db.query(Category).filter(Category.name == data.name).first():
         raise HTTPException(status_code=409, detail="Category already exists")
-    category = Category(name=data.name, icon=data.icon)
+    category = Category(name=data.name, icon=data.icon, transaction_type=data.transaction_type)
     db.add(category)
     db.commit()
     db.refresh(category)
@@ -82,6 +86,8 @@ def update_category(db: Session, category_id: int, data: CategoryUpdate) -> Cate
         category.name = data.name
     if data.icon is not None:
         category.icon = data.icon
+    if data.transaction_type is not None:
+        category.transaction_type = data.transaction_type
     db.commit()
     db.refresh(category)
     return category

@@ -36,6 +36,7 @@ class Transaction(Base):
     merchant_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    transaction_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     subcategory: Mapped[str | None] = mapped_column(String(100), nullable=True)
     classification_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)

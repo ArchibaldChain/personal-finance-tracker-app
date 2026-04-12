@@ -24,12 +24,19 @@ interface CellEdit {
 const COLUMNS: { key: string; label: string; sortable: boolean }[] = [
   { key: 'transaction_date', label: 'Date', sortable: true },
   { key: 'merchant_normalized', label: 'Merchant', sortable: true },
+  { key: 'transaction_type', label: 'Type', sortable: false },
   { key: 'category', label: 'Category', sortable: false },
   { key: 'subcategory', label: 'Subcategory', sortable: false },
   { key: 'amount', label: 'Amount', sortable: true },
   { key: 'source_type', label: 'Source', sortable: false },
   { key: '_edit', label: '', sortable: false },
 ];
+
+const TYPE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  expense:  { bg: '#fee2e2', text: '#c0392b', label: 'Expense' },
+  income:   { bg: '#f0fdf4', text: '#5a8a6a', label: 'Income' },
+  transfer: { bg: '#e0f2fe', text: '#075985', label: 'Transfer' },
+};
 
 const CAT_BADGE_COLORS = [
   { bg: '#fef9ec', text: '#92400e' },
@@ -179,6 +186,21 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                 >
                   <td style={styles.td}>{tx.transaction_date}</td>
                   <td style={styles.td}>{tx.merchant_normalized || tx.description || '—'}</td>
+
+                  {/* Type cell */}
+                  <td style={styles.td}>
+                    {tx.transaction_type && TYPE_STYLES[tx.transaction_type] ? (
+                      <span style={{
+                        ...styles.categoryBadge,
+                        background: TYPE_STYLES[tx.transaction_type].bg,
+                        color: TYPE_STYLES[tx.transaction_type].text,
+                      }}>
+                        {TYPE_STYLES[tx.transaction_type].label}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#c8c4be' }}>—</span>
+                    )}
+                  </td>
 
                   {/* Category cell */}
                   <td

@@ -25,6 +25,7 @@ class CategoryRead(BaseModel):
     id: int
     name: str
     icon: str | None
+    transaction_type: str | None = None
     ledger_id: int | None = None
     subcategories: list[SubcategoryRead]
 
@@ -32,11 +33,13 @@ class CategoryRead(BaseModel):
 class CategoryCreate(BaseModel):
     name: str
     icon: str | None = None
+    transaction_type: str | None = None
 
 
 class CategoryUpdate(BaseModel):
     name: str | None = None
     icon: str | None = None
+    transaction_type: str | None = None
 
 
 class CategoryListResponse(BaseModel):

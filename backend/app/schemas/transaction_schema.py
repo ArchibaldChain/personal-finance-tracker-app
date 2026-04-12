@@ -11,6 +11,7 @@ class TransactionCreate(BaseModel):
     currency: str = "USD"
     merchant_normalized: str | None = None
     description: str | None = None
+    transaction_type: str | None = None
     category: str | None = None
     subcategory: str | None = None
     notes: str | None = None
@@ -30,6 +31,7 @@ class TransactionUpdate(BaseModel):
     currency: str | None = None
     merchant_normalized: str | None = None
     description: str | None = None
+    transaction_type: str | None = None
     category: str | None = None
     subcategory: str | None = None
     notes: str | None = None
@@ -51,6 +53,7 @@ class TransactionRead(BaseModel):
     merchant_raw: str | None
     merchant_normalized: str | None
     description: str | None
+    transaction_type: str | None
     category: str | None
     subcategory: str | None
     classification_confidence: float | None
