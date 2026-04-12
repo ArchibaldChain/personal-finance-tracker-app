@@ -14,14 +14,14 @@ export function useSources(): Source[] {
   return sources;
 }
 
-export function useUsedSources(): Source[] {
+export function useUsedSources(ledgerId?: number): Source[] {
   const [sources, setSources] = useState<Source[]>([]);
 
   useEffect(() => {
-    listUsedSources()
+    listUsedSources(ledgerId)
       .then(setSources)
       .catch(console.error);
-  }, []);
+  }, [ledgerId]);
 
   return sources;
 }

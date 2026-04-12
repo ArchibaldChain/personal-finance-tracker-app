@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -15,14 +15,18 @@ def list_sources() -> dict:
 
 
 @router.get("/used")
-def list_used_sources(db: Session = Depends(get_db)) -> dict:
-    """Return sources that have at least one transaction in the database."""
-    rows = (
-        db.query(Transaction.source_name)
-        .filter(Transaction.is_deleted == False, Transaction.source_name.isnot(None))  # noqa: E712
-        .distinct()
-        .all()
+def list_used_sources(
+    ledger_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return sources that have at least one transaction in the database, optionally filtered by ledger."""
+    q = db.query(Transaction.source_name).filter(
+        Transaction.is_deleted == False,  # noqa: E712
+        Transaction.source_name.isnot(None),
     )
+    if ledger_id is not None:
+        q = q.filter(Transaction.ledger_id == ledger_id)
+    rows = q.distinct().all()
     used_keys = {row[0] for row in rows}
 
     all_sources = {s["key"]: s["display_name"] for s in registry.list_sources()}

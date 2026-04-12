@@ -31,7 +31,7 @@ function monthToDateRange(m: MonthValue) {
 export default function TransactionsPage() {
   const { ledgerId } = useApp();
   const categories = useCategories();
-  const sources = useUsedSources();
+  const sources = useUsedSources(ledgerId ?? undefined);
   const sourcesMap = Object.fromEntries(sources.map((s) => [s.key, s.display_name]));
   const location = useLocation();
   const [month, setMonth] = useState<MonthValue | null>(() => {

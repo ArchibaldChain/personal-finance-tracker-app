@@ -51,7 +51,9 @@ export async function listSources(): Promise<Source[]> {
   return resp.data.sources;
 }
 
-export async function listUsedSources(): Promise<Source[]> {
-  const resp = await client.get<{ sources: Source[] }>('/sources/used');
+export async function listUsedSources(ledgerId?: number): Promise<Source[]> {
+  const resp = await client.get<{ sources: Source[] }>('/sources/used', {
+    params: ledgerId != null ? { ledger_id: ledgerId } : {},
+  });
   return resp.data.sources;
 }

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.constants.categories import CATEGORY_DATA
 from app.models.category_model import Category, Subcategory
+from app.models.transaction_model import Transaction
 from app.schemas.category_schema import CategoryCreate, CategoryUpdate, SubcategoryCreate, SubcategoryUpdate
 
 
@@ -82,7 +83,12 @@ def update_category(db: Session, category_id: int, data: CategoryUpdate) -> Cate
     category = db.get(Category, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    if data.name is not None:
+    if data.name is not None and data.name != category.name:
+        # Cascade rename to all transactions referencing the old name
+        db.query(Transaction).filter(
+            Transaction.category == category.name,
+            Transaction.ledger_id == category.ledger_id,
+        ).update({"category": data.name})
         category.name = data.name
     if data.icon is not None:
         category.icon = data.icon
