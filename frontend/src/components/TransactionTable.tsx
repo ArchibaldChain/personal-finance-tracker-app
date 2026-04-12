@@ -32,10 +32,10 @@ const COLUMNS: { key: string; label: string; sortable: boolean }[] = [
   { key: '_edit', label: '', sortable: false },
 ];
 
-const TYPE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  expense:  { bg: '#fee2e2', text: '#c0392b', label: 'Expense' },
-  income:   { bg: '#f0fdf4', text: '#5a8a6a', label: 'Income' },
-  transfer: { bg: '#e0f2fe', text: '#075985', label: 'Transfer' },
+const TYPE_STYLES: Record<string, { text: string; label: string }> = {
+  expense:  { text: '#c0392b', label: 'Expense' },
+  income:   { text: '#5a8a6a', label: 'Income' },
+  transfer: { text: '#075985', label: 'Transfer' },
 };
 
 const CAT_BADGE_COLORS = [
@@ -191,9 +191,9 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                   <td style={styles.td}>
                     {tx.transaction_type && TYPE_STYLES[tx.transaction_type] ? (
                       <span style={{
-                        ...styles.categoryBadge,
-                        background: TYPE_STYLES[tx.transaction_type].bg,
                         color: TYPE_STYLES[tx.transaction_type].text,
+                        fontWeight: 500,
+                        fontSize: 13,
                       }}>
                         {TYPE_STYLES[tx.transaction_type].label}
                       </span>
