@@ -142,6 +142,7 @@ export default function TransactionsPage() {
         onClose={() => setIsAddOpen(false)}
         onSuccess={handleSuccess}
         categories={categories}
+        ledgerId={ledgerId}
       />
 
       <EditTransactionModal

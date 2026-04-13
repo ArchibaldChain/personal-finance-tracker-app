@@ -21,6 +21,7 @@ class TransactionCreate(BaseModel):
     merchant_raw: str | None = None
     external_id: str | None = None
     posted_date: date | None = None
+    ledger_id: int | None = None
 
 
 class TransactionUpdate(BaseModel):

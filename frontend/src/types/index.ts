@@ -68,6 +68,7 @@ export interface TransactionCreate {
   notes?: string | null;
   source_type?: 'csv' | 'manual';
   source_name?: string | null;
+  ledger_id?: number | null;
 }
 
 export type TransactionUpdate = Partial<TransactionCreate>;

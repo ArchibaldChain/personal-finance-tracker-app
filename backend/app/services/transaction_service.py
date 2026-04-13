@@ -1,26 +1,55 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import func, or_, case
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.models.category_model import Category, Subcategory
 from app.models.classification_log_model import ClassificationLog
 from app.models.transaction_model import Transaction
 from app.schemas.transaction_schema import TransactionCreate, TransactionUpdate
 from app.services import category_service
 from app.services.classification import get_classifier
-from app.services.classification.category_tree import build_category_tree
+from app.services.classification.category_tree import build_category_tree, build_category_type_map
 
 # Whitelist of sortable fields to prevent SQL injection via sort_by param
 SORTABLE_FIELDS = {
     "transaction_date": Transaction.transaction_date,
     "amount": Transaction.amount,
     "merchant_normalized": Transaction.merchant_normalized,
-    "category": Transaction.category,
     "created_at": Transaction.created_at,
 }
 
 LOW_CONFIDENCE_THRESHOLD = 0.7
+
+
+def _resolve_category_ids(
+    db: Session,
+    category_name: str | None,
+    subcategory_name: str | None,
+    ledger_id: int | None,
+) -> tuple[int | None, int | None]:
+    """Resolve category and subcategory names to their DB IDs within the given ledger."""
+    if not category_name:
+        return None, None
+
+    cat = (
+        db.query(Category)
+        .filter(Category.name == category_name, Category.ledger_id == ledger_id)
+        .first()
+    )
+    if not cat:
+        return None, None
+
+    if not subcategory_name:
+        return cat.id, None
+
+    sub = (
+        db.query(Subcategory)
+        .filter(Subcategory.category_id == cat.id, Subcategory.name == subcategory_name)
+        .first()
+    )
+    return cat.id, (sub.id if sub else None)
 
 
 def list_transactions(
@@ -53,7 +82,9 @@ def list_transactions(
         )
 
     if category:
-        query = query.filter(Transaction.category == category)
+        query = query.join(Category, Transaction.category_id == Category.id).filter(
+            Category.name == category
+        )
 
     if source_type:
         if source_type in ("csv", "manual"):
@@ -114,7 +145,9 @@ def get_transaction_summary(
             )
         )
     if category:
-        query = query.filter(Transaction.category == category)
+        query = query.join(Category, Transaction.category_id == Category.id).filter(
+            Category.name == category
+        )
     if source_type:
         if source_type in ("csv", "manual"):
             query = query.filter(Transaction.source_type == source_type)
@@ -130,19 +163,13 @@ def get_transaction_summary(
     if date_to:
         query = query.filter(Transaction.transaction_date <= date_to)
 
-    EXCLUDED_CATEGORIES = ("Transfers", "Income")
-    spending_query = query.filter(
-        or_(
-            Transaction.category.is_(None),
-            Transaction.category.notin_(EXCLUDED_CATEGORIES),
-        )
-    )
+    spending_query = query.filter(Transaction.transaction_type == "expense")
 
     expenses = spending_query.with_entities(
-        func.sum(case((Transaction.amount < 0, func.abs(Transaction.amount)), else_=0))
+        func.sum(func.abs(Transaction.amount)).filter(Transaction.amount < 0)
     ).scalar() or 0
     refunds = spending_query.with_entities(
-        func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0))
+        func.sum(Transaction.amount).filter(Transaction.amount > 0)
     ).scalar() or 0
     total_spent = max(float(expenses) - float(refunds), 0)
 
@@ -168,17 +195,22 @@ def get_transaction(db: Session, tx_id: int) -> Transaction | None:
 
 
 def create_transaction(db: Session, data: TransactionCreate) -> Transaction:
-    # Extension point: deduplication check on external_id can be inserted here.
-
-    category = data.category
-    subcategory = data.subcategory
+    category_id: int | None = None
+    subcategory_id: int | None = None
+    transaction_type = data.transaction_type
     confidence: float | None = None
     desc: str = ""
 
     settings = get_settings()
-    if category is None and settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
-        classifier = get_classifier()
-        tree = build_category_tree(category_service.list_categories(db))
+    if data.category:
+        # Resolve provided name to FK
+        category_id, subcategory_id = _resolve_category_ids(
+            db, data.category, data.subcategory, data.ledger_id
+        )
+    elif settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
+        all_cats = category_service.list_categories(db, ledger_id=data.ledger_id)
+        tree = build_category_tree(all_cats)
+        type_map = build_category_type_map(all_cats)
         seen: set[str] = set()
         parts: list[str] = []
         for p in [data.merchant_normalized, data.description]:
@@ -187,13 +219,17 @@ def create_transaction(db: Session, data: TransactionCreate) -> Transaction:
                 parts.append(p)
         desc = " ".join(parts)
         if desc:
-            result = classifier.classify(desc, tree)
-            category = result["category"]
-            subcategory = result["subcategory"]
+            classifier = get_classifier()
+            result = classifier.classify(desc, tree, type_map)
+            category_id, subcategory_id = _resolve_category_ids(
+                db, result["category"], result["subcategory"], data.ledger_id
+            )
+            transaction_type = result["transaction_type"]
             confidence = result["confidence"]
 
     transaction = Transaction(
         import_id=data.import_id,
+        ledger_id=data.ledger_id,
         source_type=data.source_type,
         source_name=data.source_name,
         external_id=data.external_id,
@@ -204,8 +240,9 @@ def create_transaction(db: Session, data: TransactionCreate) -> Transaction:
         merchant_raw=data.merchant_raw,
         merchant_normalized=data.merchant_normalized,
         description=data.description,
-        category=category,
-        subcategory=subcategory,
+        transaction_type=transaction_type,
+        category_id=category_id,
+        subcategory_id=subcategory_id,
         classification_confidence=confidence,
         notes=data.notes,
         is_deleted=False,
@@ -217,8 +254,8 @@ def create_transaction(db: Session, data: TransactionCreate) -> Transaction:
     if confidence is not None:
         db.add(ClassificationLog(
             description=desc,
-            category=category,
-            subcategory=subcategory,
+            category=transaction.category,
+            subcategory=transaction.subcategory,
             confidence=confidence,
             model=get_classifier()._model,
             transaction_id=transaction.id,
@@ -233,13 +270,22 @@ def update_transaction(db: Session, tx_id: int, data: TransactionUpdate) -> Tran
     if not transaction:
         return None
 
-    # Only update fields that were explicitly provided (PATCH semantics)
     update_data = data.model_dump(exclude_unset=True)
+
+    # Handle category/subcategory specially — resolve names to FK IDs
+    category_name = update_data.pop("category", None)
+    subcategory_name = update_data.pop("subcategory", None)
+
     for field, value in update_data.items():
         setattr(transaction, field, value)
 
-    # If category was manually set, clear the LLM confidence so the ⚠ indicator disappears
-    if 'category' in update_data:
+    if "category" in data.model_dump(exclude_unset=True) or "subcategory" in data.model_dump(exclude_unset=True):
+        cat_id, sub_id = _resolve_category_ids(
+            db, category_name, subcategory_name, transaction.ledger_id
+        )
+        transaction.category_id = cat_id
+        transaction.subcategory_id = sub_id
+        # Clear LLM confidence when category is manually set
         transaction.classification_confidence = None
 
     transaction.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)

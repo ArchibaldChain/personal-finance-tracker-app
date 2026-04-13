@@ -9,6 +9,7 @@ interface AddTransactionModalProps {
   onClose: () => void;
   onSuccess: () => void;
   categories: Category[];
+  ledgerId?: number | null;
 }
 
 export default function AddTransactionModal({
@@ -16,13 +17,14 @@ export default function AddTransactionModal({
   onClose,
   onSuccess,
   categories,
+  ledgerId,
 }: AddTransactionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (data: TransactionCreate) => {
     setIsLoading(true);
     try {
-      await createTransaction({ ...data, source_type: 'manual' });
+      await createTransaction({ ...data, source_type: 'manual', ledger_id: ledgerId ?? null });
       onSuccess();
       onClose();
     } finally {

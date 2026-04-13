@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from app.config import get_settings
+from app.models.category_model import Category, Subcategory
 from app.models.classification_log_model import ClassificationLog
 from app.models.import_model import Import
 from app.models.import_row_model import ImportRow
@@ -82,16 +83,27 @@ def process_import(db: Session, import_id: int) -> Import:
     classifier = None
     category_tree: dict[str, list[str]] = {}
     category_type_map: dict[str, str] = {}
+    # name → id lookup maps for FK resolution
+    cat_name_to_id: dict[str, int] = {}
+    sub_name_to_id: dict[tuple[int, str], int] = {}  # (category_id, subname) → sub_id
     settings = get_settings()
     if settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
         classifier = get_classifier()
-        all_categories = category_service.list_categories(db)
+        all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
         category_tree = build_category_tree(all_categories)
         category_type_map = build_category_type_map(all_categories)
     elif settings.CLASSIFICATION_ENABLED:
-        all_categories = category_service.list_categories(db)
+        all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
         category_tree = build_category_tree(all_categories)
         category_type_map = build_category_type_map(all_categories)
+    else:
+        all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
+
+    # Build name→id maps once for the batch
+    for cat in all_categories:
+        cat_name_to_id[cat.name] = cat.id
+        for sub in cat.subcategories:
+            sub_name_to_id[(cat.id, sub.name)] = sub.id
 
     pre_classifier = SimpleClassifier() if category_tree else None
     logger.info(
@@ -155,6 +167,10 @@ def process_import(db: Session, import_id: int) -> Import:
 
             # Extension point: deduplication check on external_id can go here.
 
+            # Resolve category/subcategory names to FK IDs
+            cat_id = cat_name_to_id.get(category) if category else None
+            sub_id = sub_name_to_id.get((cat_id, subcategory)) if (cat_id and subcategory) else None
+
             transaction = Transaction(
                 import_id=import_id,
                 source_type="csv",
@@ -168,8 +184,8 @@ def process_import(db: Session, import_id: int) -> Import:
                 merchant_normalized=parsed.merchant_raw,  # raw used as initial normalized value
                 description=parsed.description,
                 transaction_type=transaction_type,
-                category=category,
-                subcategory=subcategory,
+                category_id=cat_id,
+                subcategory_id=sub_id,
                 classification_confidence=confidence,
                 notes=parsed.notes,
                 is_deleted=False,

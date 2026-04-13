@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, func
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -37,8 +38,8 @@ class Transaction(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     transaction_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    subcategory: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    category_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("categories.id"), nullable=True)
+    subcategory_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("subcategories.id"), nullable=True)
     classification_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -62,10 +63,24 @@ class Transaction(Base):
     updated_by: Mapped["User | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "User", foreign_keys=[updated_by_user_id]
     )
+    category_obj: Mapped["Category | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Category", foreign_keys=[category_id], lazy="joined"
+    )
+    subcategory_obj: Mapped["Subcategory | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Subcategory", foreign_keys=[subcategory_id], lazy="joined"
+    )
+
+    @hybrid_property
+    def category(self) -> str | None:
+        return self.category_obj.name if self.category_obj else None
+
+    @hybrid_property
+    def subcategory(self) -> str | None:
+        return self.subcategory_obj.name if self.subcategory_obj else None
 
     __table_args__ = (
         Index("ix_transactions_transaction_date", "transaction_date"),
-        Index("ix_transactions_category", "category"),
+        Index("ix_transactions_category_id", "category_id"),
         Index("ix_transactions_source_type", "source_type"),
         Index("ix_transactions_is_deleted", "is_deleted"),
         Index("ix_transactions_external_id", "external_id"),
