@@ -123,7 +123,7 @@ CATEGORY_DATA: list[dict] = [
             {"name": "Mobile Plan", "icon": "Smartphone"},
             {"name": "Internet", "icon": "Wifi"},
             {"name": "Phone Accessories", "icon": "Cable"},
-            {"name": "Subscription", "icon": "RefreshCcw"},
+            {"name": "Online Subscription", "icon": "RefreshCcw"},
         ],
     },
     {
@@ -158,7 +158,6 @@ CATEGORY_DATA: list[dict] = [
         "subcategories": [
             {"name": "Movies", "icon": "Clapperboard"},
             {"name": "Games", "icon": "Gamepad2"},
-            {"name": "Streaming Services", "icon": "Tv"},
             {"name": "Events", "icon": "Ticket"},
             {"name": "Hobbies", "icon": "Palette"},
         ],
@@ -184,6 +183,7 @@ CATEGORY_DATA: list[dict] = [
             {"name": "Pet Supplies", "icon": "PawPrint"},
             {"name": "Grooming", "icon": "Scissors"},
             {"name": "Pet Services", "icon": "PawPrint"},
+            {"name": "Pet Insurance", "icon": "Shield"},
         ],
     },
     {
@@ -259,8 +259,8 @@ CATEGORY_DATA: list[dict] = [
         "icon": "CircleDollarSign",
         "subcategories": [
             {"name": "Cashback", "icon": "CreditCard"},
-            {"name": "Interest Income", "icon": "PiggyBank"},
-            {"name": "Salary Income", "icon": "TrendingUp"},
+            {"name": "Interest", "icon": "PiggyBank"},
+            {"name": "Salary", "icon": "TrendingUp"},
             {"name": "Other Income", "icon": "Banknote"},
         ],
     },

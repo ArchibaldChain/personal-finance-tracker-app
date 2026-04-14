@@ -73,10 +73,6 @@ class SimpleClassifier(BaseClassifier):
             matched_kw = next((kw for kw in keywords if kw in desc), None)
             if matched_kw:
                 if category in category_tree and subcategory in category_tree[category]:
-                    logger.debug(
-                        "rule match: keyword=%r -> %s / %s",
-                        matched_kw, category, subcategory,
-                    )
                     transaction_type = _resolve_transaction_type(category, category_type_map)
                     return {
                         "transaction_type": transaction_type,
@@ -84,8 +80,20 @@ class SimpleClassifier(BaseClassifier):
                         "subcategory": subcategory,
                         "confidence": 1.0,
                     }
+                if category in category_tree:
+                    logger.warning(
+                        "rule match: keyword=%r -> %s (subcategory %r not found, returning category only)",
+                        matched_kw, category, subcategory,
+                    )
+                    transaction_type = _resolve_transaction_type(category, category_type_map)
+                    return {
+                        "transaction_type": transaction_type,
+                        "category": category,
+                        "subcategory": None,
+                        "confidence": 0.5,
+                    }
                 logger.warning(
-                    "rule matched keyword=%r -> %s / %s but not found in category_tree",
+                    "rule matched keyword=%r -> %s / %s but category not found in category_tree",
                     matched_kw, category, subcategory,
                 )
 

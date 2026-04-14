@@ -10,40 +10,75 @@ logger = logging.getLogger(__name__)
 SINGLE_PASS_MAX_CATEGORIES = 30
 SINGLE_PASS_MAX_SUBCATEGORIES = 100
 
-_SYSTEM_PROMPT = """You are a financial transaction categorizer. Your job is to classify a bank transaction into exactly one category and one subcategory from the provided list.
+_TRANSACTION_TYPE_RULES = """
+Transaction type definitions — you MUST choose one of: "expense", "income", "transfer"
 
-Rules:
+TRANSFER — money moving between accounts, not a real gain or loss:
+  - Account transfers (internal, external, between own accounts)
+  - E-transfers sent or RECEIVED
+  - Credit card payments
+  - Investment transfers (e.g. moving money to a brokerage)
+  - Receiving a transfer from another person (positive amount)
+
+INCOME — genuine earnings or entitlements:
+  - Salary, wages, payroll deposits
+  - Interest earned on savings/investments
+  - Government benefits, tax refunds, grants
+  - Cashback rewards credited as cash
+
+EXPENSE — spending or cost, including offsets:
+  - Any purchase, bill, subscription, fee (typically negative amount)
+  - Merchandise returns and refunds (positive amount) — these offset expenses,
+    do NOT classify as income
+  - Rewards redeemed as a discount on a purchase
+
+POSITIVE AMOUNT DISAMBIGUATION — when the amount is positive, pick by context:
+  - Received from another person/account → transfer
+  - Return / refund on a purchase → expense
+  - Salary / interest / benefit → income
+""".strip()
+
+_SYSTEM_PROMPT = f"""You are a financial transaction categorizer.
+Your job is to classify a bank transaction into a transaction_type, one category, and one subcategory.
+
+{_TRANSACTION_TYPE_RULES}
+
+Category rules:
 - You MUST select a category_index from the numbered list.
-- Select the best matching subcategory_index. If none of the subcategories fit, use -1.
+- The listed categories already have an assigned type shown in brackets — prefer consistency, but override if the transaction clearly belongs to a different type.
+- Select the best matching subcategory_index. If none fit, use -1.
 - Do NOT invent new categories or subcategories.
-- Choose the best possible match. If ambiguous, pick the most common interpretation.
 - Return ONLY a JSON object. No explanation, no markdown, no extra keys.
 
 Response format:
-{"category_index": <int>, "subcategory_index": <int or -1>, "confidence": <float 0.0-1.0>}"""
+{{"transaction_type": "expense|income|transfer", "category_index": <int>, "subcategory_index": <int or -1>, "confidence": <float 0.0-1.0>}}"""
 
-_SYSTEM_PROMPT_PASS1 = """You are a financial transaction categorizer. Your job is to classify a bank transaction into exactly one category from the provided list.
+_SYSTEM_PROMPT_PASS1 = f"""You are a financial transaction categorizer.
+Your job is to classify a bank transaction into a transaction_type and one category.
 
-Rules:
+{_TRANSACTION_TYPE_RULES}
+
+Category rules:
 - You MUST select a category_index from the numbered list.
+- The listed categories already have an assigned type shown in brackets — prefer consistency, but override if the transaction clearly belongs to a different type.
 - Do NOT invent new categories.
-- Choose the best possible match.
 - Return ONLY a JSON object. No explanation, no markdown, no extra keys.
 
 Response format:
-{"category_index": <int>, "confidence": <float 0.0-1.0>}"""
+{{"transaction_type": "expense|income|transfer", "category_index": <int>, "confidence": <float 0.0-1.0>}}"""
 
-_SYSTEM_PROMPT_PASS2 = """You are a financial transaction categorizer. Your job is to select the best subcategory for a transaction given its category.
+_SYSTEM_PROMPT_PASS2 = """You are a financial transaction categorizer.
+Your job is to select the best subcategory for a transaction given its category.
 
 Rules:
-- Select the best matching subcategory_index from the numbered list. If none of the subcategories fit, use -1.
+- Select the best matching subcategory_index from the numbered list. If none fit, use -1.
 - Do NOT invent new subcategories.
-- Choose the best possible match.
 - Return ONLY a JSON object. No explanation, no markdown, no extra keys.
 
 Response format:
 {"subcategory_index": <int or -1>, "confidence": <float 0.0-1.0>}"""
 
+_VALID_TYPES = {"expense", "income", "transfer"}
 _FALLBACK: dict = {"transaction_type": None, "category": None, "subcategory": None, "confidence": 0.0}
 
 
@@ -51,6 +86,7 @@ class LLMClassifier(BaseClassifier):
     """OpenAI-based transaction classifier using gpt-4o-mini.
 
     Uses index-based output to avoid hallucinated category name variations.
+    The LLM decides transaction_type directly from the description and amount context.
     Automatically switches to a two-pass approach when the category tree is large.
     Results are cached in memory by (normalized_description, tree_hash).
     """
@@ -109,7 +145,7 @@ class LLMClassifier(BaseClassifier):
         user_prompt = (
             f'Transaction description: "{description}"\n\n'
             f"Available categories and subcategories:\n"
-            f"{self._build_category_block(category_tree)}\n\n"
+            f"{self._build_category_block(category_tree, category_type_map)}\n\n"
             f"Return the JSON object now."
         )
         raw = self._call_llm(_SYSTEM_PROMPT, user_prompt)
@@ -123,8 +159,11 @@ class LLMClassifier(BaseClassifier):
     ) -> dict:
         categories_list = list(category_tree.keys())
 
-        # Pass 1 — pick category
-        cat_block = "\n".join(f"[{i}] {name}" for i, name in enumerate(categories_list))
+        # Pass 1 — pick transaction_type + category
+        cat_block = "\n".join(
+            f"[{i}] {name} [{(category_type_map or {}).get(name, 'expense')}]"
+            for i, name in enumerate(categories_list)
+        )
         pass1_prompt = (
             f'Transaction description: "{description}"\n\n'
             f"Available categories:\n{cat_block}\n\n"
@@ -137,7 +176,7 @@ class LLMClassifier(BaseClassifier):
             return _FALLBACK
         resolved_category = categories_list[cat_idx]
         confidence1 = max(0.0, min(1.0, float(raw1.get("confidence", 0.0))))
-        transaction_type = _resolve_transaction_type(resolved_category, category_type_map)
+        transaction_type = _extract_type(raw1, resolved_category, category_type_map)
 
         # Pass 2 — pick subcategory within resolved category
         subcats = category_tree[resolved_category]
@@ -198,7 +237,7 @@ class LLMClassifier(BaseClassifier):
 
         resolved_category = categories_list[cat_idx]
         subcats = category_tree[resolved_category]
-        transaction_type = _resolve_transaction_type(resolved_category, category_type_map)
+        transaction_type = _extract_type(raw_response, resolved_category, category_type_map)
 
         sub_idx = raw_response.get("subcategory_index")
         if not isinstance(sub_idx, int):
@@ -215,10 +254,27 @@ class LLMClassifier(BaseClassifier):
             "confidence": confidence,
         }
 
-    def _build_category_block(self, category_tree: dict[str, list[str]]) -> str:
+    def _build_category_block(
+        self,
+        category_tree: dict[str, list[str]],
+        category_type_map: dict[str, str] | None = None,
+    ) -> str:
         lines = []
         for cat_idx, (cat_name, subcats) in enumerate(category_tree.items()):
-            lines.append(f"[{cat_idx}] {cat_name}")
+            cat_type = (category_type_map or {}).get(cat_name, "expense")
+            lines.append(f"[{cat_idx}] {cat_name} [{cat_type}]")
             for sub_idx, sub_name in enumerate(subcats):
                 lines.append(f"    [{sub_idx}] {sub_name}")
         return "\n".join(lines)
+
+
+def _extract_type(
+    raw: dict,
+    resolved_category: str,
+    category_type_map: dict[str, str] | None,
+) -> str:
+    """Read transaction_type from the LLM response; fall back to the DB map."""
+    llm_type = raw.get("transaction_type")
+    if isinstance(llm_type, str) and llm_type in _VALID_TYPES:
+        return llm_type
+    return _resolve_transaction_type(resolved_category, category_type_map) or "expense"
