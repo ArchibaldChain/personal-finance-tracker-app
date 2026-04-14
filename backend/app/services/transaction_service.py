@@ -207,6 +207,8 @@ def create_transaction(db: Session, data: TransactionCreate) -> Transaction:
         category_id, subcategory_id = _resolve_category_ids(
             db, data.category, data.subcategory, data.ledger_id
         )
+    elif data.source_type == "manual":
+        pass  # manual transactions skip classification — type/category set by user
     elif settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
         all_cats = category_service.list_categories(db, ledger_id=data.ledger_id)
         tree = build_category_tree(all_cats)

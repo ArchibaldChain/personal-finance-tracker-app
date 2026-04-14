@@ -36,10 +36,6 @@ export default function TransactionFiltersBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
-  const handleCategory = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...filters, category: e.target.value || undefined, page: 1 });
-  };
-
   const handleSourceType = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onChange({ ...filters, source_type: e.target.value || undefined, page: 1 });
   };
@@ -58,12 +54,14 @@ export default function TransactionFiltersBar({
         onChange={(e) => setSearchInput(e.target.value)}
         style={{ ...styles.input, flex: 2, minWidth: 200 }}
       />
-      <select value={filters.category ?? ''} onChange={handleCategory} style={styles.input}>
+      <select
+        value={filters.category ?? ''}
+        onChange={(e) => onChange({ ...filters, category: e.target.value || undefined, page: 1 })}
+        style={styles.input}
+      >
         <option value="">All categories</option>
         {categories.map((c) => (
-          <option key={c.id} value={c.name}>
-            {c.name}
-          </option>
+          <option key={c.id} value={c.name}>{c.name}</option>
         ))}
       </select>
       <select value={filters.source_type ?? ''} onChange={handleSourceType} style={styles.input}>

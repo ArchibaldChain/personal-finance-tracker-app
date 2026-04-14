@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Category, Transaction, TransactionCreate } from '../types';
+import IconSelect from './IconSelect';
 
 interface TransactionFormProps {
   initialValues?: Transaction;
@@ -10,17 +11,41 @@ interface TransactionFormProps {
   onDelete?: () => void;
 }
 
+type AddTypeMode = 'expense' | 'return' | 'transfer' | 'income';
+type EditTypeMode = 'expense' | 'transfer' | 'income';
+
+const ADD_TYPE_BUTTONS: { value: AddTypeMode; label: string }[] = [
+  { value: 'expense',  label: 'Expense' },
+  { value: 'return',   label: 'Return' },
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'income',   label: 'Income' },
+];
+
+const EDIT_TYPE_BUTTONS: { value: EditTypeMode; label: string }[] = [
+  { value: 'expense',  label: 'Expense' },
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'income',   label: 'Income' },
+];
+
+const TYPE_COLORS: Record<string, { border: string; bg: string; text: string }> = {
+  expense:  { border: '#c0392b', bg: '#fee2e2', text: '#c0392b' },
+  return:   { border: '#5a8a6a', bg: '#f0fdf4', text: '#5a8a6a' },
+  transfer: { border: '#075985', bg: '#e0f2fe', text: '#075985' },
+  income:   { border: '#5a8a6a', bg: '#f0fdf4', text: '#5a8a6a' },
+};
+
 const EMPTY: TransactionCreate = {
-  transaction_date: '',
+  transaction_date: new Date().toISOString().slice(0, 10),
   amount: 0,
-  currency: 'USD',
+  currency: 'CAD',
   merchant_normalized: '',
   description: '',
+  transaction_type: 'expense',
   category: '',
   subcategory: '',
   notes: '',
   source_type: 'manual',
-  source_name: '',
+  source_name: 'Cash',
 };
 
 function toFormValues(tx: Transaction): TransactionCreate {
@@ -30,6 +55,7 @@ function toFormValues(tx: Transaction): TransactionCreate {
     currency: tx.currency,
     merchant_normalized: tx.merchant_normalized ?? '',
     description: tx.description ?? '',
+    transaction_type: tx.transaction_type ?? 'expense',
     category: tx.category ?? '',
     subcategory: tx.subcategory ?? '',
     notes: tx.notes ?? '',
@@ -46,18 +72,21 @@ export default function TransactionForm({
   isLoading,
   onDelete,
 }: TransactionFormProps) {
+  const isEdit = !!initialValues;
+
   const [form, setForm] = useState<TransactionCreate>(
     initialValues ? toFormValues(initialValues) : EMPTY
   );
+  // For add mode, track the UI button separately (expense/return/transfer/income)
+  const [addMode, setAddMode] = useState<AddTypeMode>('expense');
   const [error, setError] = useState<string | null>(null);
 
-  // Reset form when initialValues changes (e.g. opening different transaction)
   useEffect(() => {
     setForm(initialValues ? toFormValues(initialValues) : EMPTY);
+    setAddMode('expense');
     setError(null);
   }, [initialValues]);
 
-  // When category changes, reset subcategory
   const handleCategoryChange = (cat: string) => {
     setForm((f) => ({ ...f, category: cat, subcategory: '' }));
   };
@@ -69,28 +98,38 @@ export default function TransactionForm({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    if (name === 'category') {
-      handleCategoryChange(value);
-    } else {
-      setForm((f) => ({ ...f, [name]: value }));
-    }
+    setForm((f) => ({ ...f, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!form.transaction_date) {
-      setError('Date is required');
-      return;
-    }
+    if (!form.transaction_date) { setError('Date is required'); return; }
     if (form.amount === undefined || form.amount === null || String(form.amount) === '') {
-      setError('Amount is required');
-      return;
+      setError('Amount is required'); return;
     }
+
+    let amount = Number(form.amount);
+    let transaction_type = form.transaction_type ?? 'expense';
+
+    if (!isEdit) {
+      // Map UI mode to stored values
+      if (addMode === 'expense') {
+        transaction_type = 'expense';
+        amount = -Math.abs(amount);
+      } else if (addMode === 'return') {
+        transaction_type = 'expense';
+        amount = Math.abs(amount);
+      } else {
+        transaction_type = addMode; // 'transfer' | 'income'
+      }
+    }
+
     try {
       await onSubmit({
         ...form,
-        amount: Number(form.amount),
+        amount,
+        transaction_type,
         merchant_normalized: form.merchant_normalized || null,
         description: form.description || null,
         category: form.category || null,
@@ -107,6 +146,54 @@ export default function TransactionForm({
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
       {error && <div style={styles.error}>{error}</div>}
+
+      {/* Type buttons */}
+      <div style={styles.typeBtnRow}>
+        {isEdit
+          ? EDIT_TYPE_BUTTONS.map((btn) => {
+              const active = (form.transaction_type ?? 'expense') === btn.value;
+              const colors = TYPE_COLORS[btn.value];
+              return (
+                <button
+                  key={btn.value}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, transaction_type: btn.value }))}
+                  style={{
+                    ...styles.typeBtn,
+                    flex: 1,
+                    border: active ? `2px solid ${colors.border}` : '2px solid #e8e4de',
+                    background: active ? colors.bg : '#fff',
+                    color: active ? colors.text : '#6b6560',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {btn.label}
+                </button>
+              );
+            })
+          : ADD_TYPE_BUTTONS.map((btn) => {
+              const active = addMode === btn.value;
+              const colors = TYPE_COLORS[btn.value];
+              return (
+                <button
+                  key={btn.value}
+                  type="button"
+                  onClick={() => setAddMode(btn.value)}
+                  style={{
+                    ...styles.typeBtn,
+                    flex: 1,
+                    border: active ? `2px solid ${colors.border}` : '2px solid #e8e4de',
+                    background: active ? colors.bg : '#fff',
+                    color: active ? colors.text : '#6b6560',
+                    fontWeight: active ? 600 : 400,
+                  }}
+                >
+                  {btn.label}
+                </button>
+              );
+            })
+        }
+      </div>
 
       <div style={styles.row}>
         <label style={styles.label}>
@@ -130,7 +217,7 @@ export default function TransactionForm({
             step="0.01"
             required
             style={styles.input}
-            placeholder="-12.50"
+            placeholder="12.50"
           />
         </label>
       </div>
@@ -139,10 +226,10 @@ export default function TransactionForm({
         <label style={styles.label}>
           Currency
           <select name="currency" value={form.currency} onChange={handleChange} style={styles.input}>
+            <option value="CAD">CAD</option>
             <option value="USD">USD</option>
             <option value="EUR">EUR</option>
             <option value="GBP">GBP</option>
-            <option value="CAD">CAD</option>
             <option value="JPY">JPY</option>
           </select>
         </label>
@@ -174,31 +261,20 @@ export default function TransactionForm({
       <div style={styles.row}>
         <label style={styles.label}>
           Category
-          <select name="category" value={form.category ?? ''} onChange={handleChange} style={styles.input}>
-            <option value="">— None —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <IconSelect
+            value={form.category ?? ''}
+            options={categories.map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
+            onChange={(val) => handleCategoryChange(val)}
+          />
         </label>
         <label style={styles.label}>
           Subcategory
-          <select
-            name="subcategory"
+          <IconSelect
             value={form.subcategory ?? ''}
-            onChange={handleChange}
-            style={styles.input}
+            options={subcategories.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
+            onChange={(val) => setForm((f) => ({ ...f, subcategory: val }))}
             disabled={subcategories.length === 0}
-          >
-            <option value="">— None —</option>
-            {subcategories.map((s) => (
-              <option key={s.id} value={s.name}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          />
         </label>
       </div>
 
@@ -228,12 +304,7 @@ export default function TransactionForm({
 
       <div style={styles.actions}>
         {onDelete && (
-          <button
-            type="button"
-            onClick={onDelete}
-            style={styles.deleteBtn}
-            disabled={isLoading}
-          >
+          <button type="button" onClick={onDelete} style={styles.deleteBtn} disabled={isLoading}>
             Delete
           </button>
         )}
@@ -258,6 +329,14 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 12px',
     borderRadius: 4,
     fontSize: 14,
+  },
+  typeBtnRow: { display: 'flex', gap: 6 },
+  typeBtn: {
+    padding: '7px 0',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    transition: 'background 0.1s, border-color 0.1s',
   },
   row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
   label: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14, fontWeight: 500 },

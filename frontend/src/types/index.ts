@@ -63,6 +63,7 @@ export interface TransactionCreate {
   currency?: string;
   merchant_normalized?: string | null;
   description?: string | null;
+  transaction_type?: string | null;
   category?: string | null;
   subcategory?: string | null;
   notes?: string | null;

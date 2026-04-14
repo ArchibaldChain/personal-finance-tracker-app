@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import CategoryIcon from './CategoryIcon';
+import IconSelect from './IconSelect';
 import type { Category, Transaction, TransactionFilters } from '../types';
 
 interface TransactionTableProps {
@@ -208,23 +209,20 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                     onClick={(e) => openCategoryDropdown(tx, e)}
                   >
                     {isEditing && cellEdit.openStep === 'category' ? (
-                      <select
-                        autoFocus
-                        defaultValue=""
-                        onChange={(e) => { e.stopPropagation(); handleCategorySelect(tx, e.target.value); }}
-                        onBlur={() => setCellEdit((prev) => {
-                          if (!prev) return prev;
-                          if (prev.openStep !== 'category') return prev;
-                          return { ...prev, openStep: null };
-                        })}
-                        onClick={(e) => e.stopPropagation()}
-                        style={styles.inlineSelect}
-                      >
-                        <option value="">— None —</option>
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                      </select>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <IconSelect
+                          value={cellEdit.category ?? ''}
+                          options={categories.map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
+                          onChange={(val) => handleCategorySelect(tx, val)}
+                          onClose={() => setCellEdit((prev) => {
+                            if (!prev || prev.openStep !== 'category') return prev;
+                            return { ...prev, openStep: null };
+                          })}
+                          initialOpen
+                          portal
+                          style={{ minWidth: 140 }}
+                        />
+                      </div>
                     ) : (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {displayCat && colors ? (
@@ -258,19 +256,17 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                     onClick={(e) => isEditing && pendingSubcats.length > 0 && openSubcategoryDropdown(tx, e)}
                   >
                     {isEditing && cellEdit.openStep === 'subcategory' ? (
-                      <select
-                        autoFocus
-                        defaultValue=""
-                        onChange={(e) => { e.stopPropagation(); handleSubcategorySelect(e.target.value); }}
-                        onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
-                        onClick={(e) => e.stopPropagation()}
-                        style={styles.inlineSelect}
-                      >
-                        <option value="">— None —</option>
-                        {pendingSubcats.map((s) => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))}
-                      </select>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <IconSelect
+                          value={cellEdit.subcategory ?? ''}
+                          options={pendingSubcats.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
+                          onChange={(val) => handleSubcategorySelect(val)}
+                          onClose={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
+                          initialOpen
+                          portal
+                          style={{ minWidth: 140 }}
+                        />
+                      </div>
                     ) : (
                       displaySub || '—'
                     )}
