@@ -35,7 +35,7 @@ const TYPE_COLORS: Record<string, { border: string; bg: string; text: string }> 
 };
 
 const EMPTY: TransactionCreate = {
-  transaction_date: new Date().toISOString().slice(0, 10),
+  transaction_date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(),
   amount: 0,
   currency: 'CAD',
   merchant_normalized: '',
@@ -123,6 +123,14 @@ export default function TransactionForm({
       } else {
         transaction_type = addMode; // 'transfer' | 'income'
       }
+    } else {
+      // In edit mode, normalize the sign to match the selected type
+      if (transaction_type === 'expense') {
+        amount = -Math.abs(amount);
+      } else if (transaction_type === 'income') {
+        amount = Math.abs(amount);
+      }
+      // 'transfer' keeps the sign as-is (user-entered)
     }
 
     try {

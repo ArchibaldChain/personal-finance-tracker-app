@@ -7,11 +7,13 @@ from app.parsers.bofa_parser import BofAParser
 from app.parsers.chase_parser import ChaseParser
 from app.parsers.registry import registry
 from app.parsers.walmart_rewards_parser import WalmartRewardsParser
+from app.parsers.wealthsimple_parser import WealthsimpleInvestmentParser
 
 registry.register("chase", ChaseParser, display_name="Chase")
 registry.register("bofa", BofAParser, display_name="Bank of America")
 registry.register("walmart_rewards", WalmartRewardsParser, display_name="Walmart Rewards")
 registry.register("bmo_credit_card", BMOCreditParser, display_name="BMO Credit")
 registry.register("bmo_debit", BMODebitParser, display_name="BMO Debit")
+registry.register("wealthsimple_investment", WealthsimpleInvestmentParser, display_name="Wealthsimple Investment")
 
 __all__ = ["registry"]
