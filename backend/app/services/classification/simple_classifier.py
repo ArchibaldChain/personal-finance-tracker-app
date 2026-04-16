@@ -1,5 +1,6 @@
 import logging
 
+from app.constants.transaction_type import TransactionType
 from app.services.classification.base import BaseClassifier
 from app.services.classification.utils import resolve_transaction_type as _resolve_transaction_type
 from app.utils import get_logger
@@ -46,7 +47,7 @@ class SimpleClassifier(BaseClassifier):
         (["bonus interest", "[in]"], "Income", "Interest"),
 
         # --- Credit Card Payment ---
-        (["walmart m/c", "bmo payment", "pymt received", "payment - thank you"], 
+        (["walmart m/c", "bmo payment", "pymt received", "payment - thank you"],
          "Transfers", "Credit Card Payment"),
 
         # --- Cash Withdrawal ---
@@ -65,6 +66,7 @@ class SimpleClassifier(BaseClassifier):
         description: str,
         category_tree: dict[str, list[str]],
         category_type_map: dict[str, str] | None = None,
+        forced_type: TransactionType | None = None,
     ) -> dict:
         desc = description.lower()
         logger.debug("classifying: %r", description)
@@ -73,7 +75,7 @@ class SimpleClassifier(BaseClassifier):
             matched_kw = next((kw for kw in keywords if kw in desc), None)
             if matched_kw:
                 if category in category_tree and subcategory in category_tree[category]:
-                    transaction_type = _resolve_transaction_type(category, category_type_map)
+                    transaction_type = forced_type.value if forced_type else _resolve_transaction_type(category, category_type_map)
                     return {
                         "transaction_type": transaction_type,
                         "category": category,
@@ -85,7 +87,7 @@ class SimpleClassifier(BaseClassifier):
                         "rule match: keyword=%r -> %s (subcategory %r not found, returning category only)",
                         matched_kw, category, subcategory,
                     )
-                    transaction_type = _resolve_transaction_type(category, category_type_map)
+                    transaction_type = forced_type.value if forced_type else _resolve_transaction_type(category, category_type_map)
                     return {
                         "transaction_type": transaction_type,
                         "category": category,
@@ -98,4 +100,5 @@ class SimpleClassifier(BaseClassifier):
                 )
 
         logger.warning("no rule matched for: %r", description)
-        return {"transaction_type": None, "category": None, "subcategory": None, "confidence": 0.0}
+        transaction_type = forced_type.value if forced_type else None
+        return {"transaction_type": transaction_type, "category": None, "subcategory": None, "confidence": 0.0}

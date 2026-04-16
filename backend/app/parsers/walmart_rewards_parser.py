@@ -25,6 +25,7 @@ class WalmartRewardsParser(BaseParser):
     Date format: YYYY-MM-DD
     """
 
+    account_type = "credit"
     DATE_FORMAT = "%Y-%m-%d"
 
     def get_column_mapping(self) -> dict[str, str]:

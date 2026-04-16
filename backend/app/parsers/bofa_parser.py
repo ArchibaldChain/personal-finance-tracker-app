@@ -21,6 +21,7 @@ class BofAParser(BaseParser):
     Amount sign convention: negative = debit (expense), positive = credit.
     """
 
+    account_type = "debit"
     DATE_FORMAT = "%m/%d/%Y"
 
     def get_column_mapping(self) -> dict[str, str]:

@@ -5,6 +5,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from app.constants.transaction_type import TransactionType
+
 
 class ParsedRow:
     """Normalized output of a parsed CSV row."""
@@ -37,7 +39,17 @@ class BaseParser(ABC):
     1. Create a new module in app/parsers/ (e.g., wells_fargo_parser.py)
     2. Subclass BaseParser and implement parse_row() and get_column_mapping()
     3. Register it in app/parsers/__init__.py
+
+    Class attributes:
+        account_type: Broad account category used to apply hard classification rules
+                      before falling back to the LLM. One of "debit", "credit", "investment".
     """
+
+    account_type: str = "debit"
+
+    def infer_transaction_type(self, parsed: "ParsedRow") -> TransactionType | None:
+        """Return a definitive TransactionType based on hard rules, or None to let the classifier decide."""
+        return None
 
     @abstractmethod
     def parse_row(self, raw: dict[str, Any]) -> ParsedRow:

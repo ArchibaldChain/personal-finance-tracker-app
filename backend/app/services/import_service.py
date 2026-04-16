@@ -128,6 +128,12 @@ def process_import(db: Session, import_id: int) -> Import:
             subcategory: str | None = None
             confidence: float | None = None
             classifier_model: str | None = None
+
+            # Apply hard type rules from the parser regardless of whether classification is on
+            forced_type = parser.infer_transaction_type(parsed)
+            if forced_type is not None:
+                transaction_type = forced_type.value
+
             if category_tree:
                 seen: set[str] = set()
                 parts: list[str] = []
@@ -137,9 +143,8 @@ def process_import(db: Session, import_id: int) -> Import:
                         parts.append(p)
                 desc = " ".join(parts)
                 if desc:
-                    # Try rule-based classifier first
                     if pre_classifier:
-                        result = pre_classifier.classify(desc, category_tree, category_type_map)
+                        result = pre_classifier.classify(desc, category_tree, category_type_map, forced_type)
                         if result["confidence"] > 0.0:
                             transaction_type = result["transaction_type"]
                             category = result["category"]
@@ -151,10 +156,9 @@ def process_import(db: Session, import_id: int) -> Import:
                                 desc, transaction_type, category, subcategory,
                             )
 
-                    # Fall back to LLM if no rule matched
                     if confidence is None and classifier:
                         logger.debug("pre_classifier miss, calling LLM for: %r", desc)
-                        result = classifier.classify(desc, category_tree, category_type_map)
+                        result = classifier.classify(desc, category_tree, category_type_map, forced_type)
                         transaction_type = result["transaction_type"]
                         category = result["category"]
                         subcategory = result["subcategory"]

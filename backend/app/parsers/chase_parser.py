@@ -15,6 +15,7 @@ class ChaseParser(BaseParser):
     Amount sign convention: negative = debit (expense), positive = credit (payment/refund).
     """
 
+    account_type = "credit"
     DATE_FORMAT = "%m/%d/%Y"
 
     def get_column_mapping(self) -> dict[str, str]:

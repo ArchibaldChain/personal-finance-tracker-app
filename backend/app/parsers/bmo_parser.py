@@ -31,6 +31,7 @@ class BMODebitParser(BaseParser):
     Currency: CAD
     """
 
+    account_type = "debit"
     DATE_FORMAT = "%Y%m%d"
     _HEADER_START = "First Bank Card"
     _SKIP_PREFIXES = ("Following data",)
@@ -132,6 +133,7 @@ class BMOCreditParser(BaseParser):
     Currency: CAD
     """
 
+    account_type = "credit"
     DATE_FORMAT = "%Y%m%d"
 
     def get_column_mapping(self) -> dict[str, str]:

@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.constants.transaction_type import TransactionType
 from app.parsers.base import BaseParser, ParsedRow
 
 
@@ -23,7 +24,16 @@ class WealthsimpleInvestmentParser(BaseParser):
     Rows with an empty net_cash_amount are skipped (no cash movement).
     """
 
+    account_type = "investment"
     DATE_FORMAT = "%Y-%m-%d"
+
+    def infer_transaction_type(self, parsed: ParsedRow) -> TransactionType | None:
+        desc = (parsed.description or "").strip()
+        if desc.startswith(("BUY ", "SELL ")) or desc in ("E-Transfer", "Account Transfer"):
+            return TransactionType.TRANSFER
+        if desc == "Interest" or desc.startswith("Dividend"):
+            return TransactionType.INCOME
+        return None
 
     def get_column_mapping(self) -> dict[str, str]:
         return {
@@ -85,7 +95,9 @@ class WealthsimpleInvestmentParser(BaseParser):
         elif activity_type == "Trade" and activity_sub_type == "SELL":
             description = f"SELL {symbol} - {name}" if name else f"SELL {symbol}"
         elif activity_type == "MoneyMovement" and activity_sub_type == "EFT":
-            description = "EFT Deposit"
+            description = "Account Transfer"
+        elif activity_type == "MoneyMovement" and activity_sub_type == "E_TRFIN":
+            description = "E-Transfer"
         elif activity_type == "Dividend":
             description = f"Dividend {symbol}".strip() if symbol else "Dividend"
         elif activity_type == "Interest":

@@ -1,6 +1,7 @@
 import json
 import logging
 
+from app.constants.transaction_type import TransactionType
 from app.services.classification.base import BaseClassifier
 from app.services.classification.cache import get_cached, set_cached
 from app.services.classification.utils import resolve_transaction_type as _resolve_transaction_type
@@ -67,6 +68,17 @@ Category rules:
 Response format:
 {{"transaction_type": "expense|income|transfer", "category_index": <int>, "confidence": <float 0.0-1.0>}}"""
 
+_SYSTEM_PROMPT_PASS1_TYPED = """You are a financial transaction categorizer.
+The transaction type has already been determined. Your only job is to pick the best category.
+
+Category rules:
+- You MUST select a category_index from the numbered list.
+- Do NOT invent new categories.
+- Return ONLY a JSON object. No explanation, no markdown, no extra keys.
+
+Response format:
+{"category_index": <int>, "confidence": <float 0.0-1.0>}"""
+
 _SYSTEM_PROMPT_PASS2 = """You are a financial transaction categorizer.
 Your job is to select the best subcategory for a transaction given its category.
 
@@ -108,24 +120,37 @@ class LLMClassifier(BaseClassifier):
         description: str,
         category_tree: dict[str, list[str]],
         category_type_map: dict[str, str] | None = None,
+        forced_type: TransactionType | None = None,
     ) -> dict:
-        cached = get_cached(description, category_tree)
+        cache_key = f"{forced_type.value}:{description}" if forced_type else description
+        cached = get_cached(cache_key, category_tree)
         if cached is not None:
             return cached
 
         if not category_tree:
-            return _FALLBACK
+            return _FALLBACK if not forced_type else {**_FALLBACK, "transaction_type": forced_type.value}
+
+        # When type is forced, filter tree to matching categories (fall back to full tree if empty)
+        active_tree = category_tree
+        if forced_type:
+            filtered = {
+                cat: subcats
+                for cat, subcats in category_tree.items()
+                if (category_type_map or {}).get(cat, "expense") == forced_type.value
+            }
+            if filtered:
+                active_tree = filtered
 
         try:
-            if self._should_use_two_pass(category_tree):
-                result = self._classify_two_pass(description, category_tree, category_type_map)
+            if self._should_use_two_pass(active_tree):
+                result = self._classify_two_pass(description, active_tree, category_type_map, forced_type)
             else:
-                result = self._classify_single_pass(description, category_tree, category_type_map)
+                result = self._classify_single_pass(description, active_tree, category_type_map, forced_type)
         except Exception as e:
             logger.warning("LLM classification failed for %r: %s", description, e)
-            result = _FALLBACK
+            result = _FALLBACK if not forced_type else {**_FALLBACK, "transaction_type": forced_type.value}
 
-        set_cached(description, result)
+        set_cached(cache_key, result)
         return result
 
     def _should_use_two_pass(self, category_tree: dict[str, list[str]]) -> bool:
@@ -140,43 +165,65 @@ class LLMClassifier(BaseClassifier):
         description: str,
         category_tree: dict[str, list[str]],
         category_type_map: dict[str, str] | None = None,
+        forced_type: TransactionType | None = None,
     ) -> dict:
         categories_list = list(category_tree.keys())
-        user_prompt = (
-            f'Transaction description: "{description}"\n\n'
-            f"Available categories and subcategories:\n"
-            f"{self._build_category_block(category_tree, category_type_map)}\n\n"
-            f"Return the JSON object now."
-        )
-        raw = self._call_llm(_SYSTEM_PROMPT, user_prompt)
-        return self._validate_and_resolve(raw, category_tree, categories_list, category_type_map)
+        if forced_type:
+            user_prompt = (
+                f'Transaction description: "{description}"\n'
+                f"Transaction type: {forced_type.value}\n\n"
+                f"Available categories and subcategories:\n"
+                f"{self._build_category_block(category_tree, category_type_map)}\n\n"
+                f"Return the JSON object now."
+            )
+            raw = self._call_llm(_SYSTEM_PROMPT_TYPED, user_prompt)
+        else:
+            user_prompt = (
+                f'Transaction description: "{description}"\n\n'
+                f"Available categories and subcategories:\n"
+                f"{self._build_category_block(category_tree, category_type_map)}\n\n"
+                f"Return the JSON object now."
+            )
+            raw = self._call_llm(_SYSTEM_PROMPT, user_prompt)
+        return self._validate_and_resolve(raw, category_tree, categories_list, category_type_map, forced_type)
 
     def _classify_two_pass(
         self,
         description: str,
         category_tree: dict[str, list[str]],
         category_type_map: dict[str, str] | None = None,
+        forced_type: TransactionType | None = None,
     ) -> dict:
         categories_list = list(category_tree.keys())
+        fallback = _FALLBACK if not forced_type else {**_FALLBACK, "transaction_type": forced_type.value}
 
-        # Pass 1 — pick transaction_type + category
+        # Pass 1 — pick category (and transaction_type if not forced)
         cat_block = "\n".join(
             f"[{i}] {name} [{(category_type_map or {}).get(name, 'expense')}]"
             for i, name in enumerate(categories_list)
         )
-        pass1_prompt = (
-            f'Transaction description: "{description}"\n\n'
-            f"Available categories:\n{cat_block}\n\n"
-            f"Return the JSON object now."
-        )
-        raw1 = self._call_llm(_SYSTEM_PROMPT_PASS1, pass1_prompt)
+        if forced_type:
+            pass1_prompt = (
+                f'Transaction description: "{description}"\n'
+                f"Transaction type: {forced_type.value}\n\n"
+                f"Available categories:\n{cat_block}\n\n"
+                f"Return the JSON object now."
+            )
+            raw1 = self._call_llm(_SYSTEM_PROMPT_PASS1_TYPED, pass1_prompt)
+        else:
+            pass1_prompt = (
+                f'Transaction description: "{description}"\n\n'
+                f"Available categories:\n{cat_block}\n\n"
+                f"Return the JSON object now."
+            )
+            raw1 = self._call_llm(_SYSTEM_PROMPT_PASS1, pass1_prompt)
 
         cat_idx = raw1.get("category_index")
         if not isinstance(cat_idx, int) or cat_idx < 0 or cat_idx >= len(categories_list):
-            return _FALLBACK
+            return fallback
         resolved_category = categories_list[cat_idx]
         confidence1 = max(0.0, min(1.0, float(raw1.get("confidence", 0.0))))
-        transaction_type = _extract_type(raw1, resolved_category, category_type_map)
+        transaction_type = forced_type.value if forced_type else _extract_type(raw1, resolved_category, category_type_map)
 
         # Pass 2 — pick subcategory within resolved category
         subcats = category_tree[resolved_category]
@@ -228,16 +275,18 @@ class LLMClassifier(BaseClassifier):
         category_tree: dict[str, list[str]],
         categories_list: list[str],
         category_type_map: dict[str, str] | None = None,
+        forced_type: TransactionType | None = None,
     ) -> dict:
+        fallback = _FALLBACK if not forced_type else {**_FALLBACK, "transaction_type": forced_type.value}
         confidence = max(0.0, min(1.0, float(raw_response.get("confidence", 0.0))))
 
         cat_idx = raw_response.get("category_index")
         if not isinstance(cat_idx, int) or cat_idx < 0 or cat_idx >= len(categories_list):
-            return _FALLBACK
+            return fallback
 
         resolved_category = categories_list[cat_idx]
         subcats = category_tree[resolved_category]
-        transaction_type = _extract_type(raw_response, resolved_category, category_type_map)
+        transaction_type = forced_type.value if forced_type else _extract_type(raw_response, resolved_category, category_type_map)
 
         sub_idx = raw_response.get("subcategory_index")
         if not isinstance(sub_idx, int):
@@ -266,6 +315,19 @@ class LLMClassifier(BaseClassifier):
             for sub_idx, sub_name in enumerate(subcats):
                 lines.append(f"    [{sub_idx}] {sub_name}")
         return "\n".join(lines)
+
+
+_SYSTEM_PROMPT_TYPED = """You are a financial transaction categorizer.
+The transaction type has already been determined. Your only job is to pick the best category and subcategory.
+
+Category rules:
+- You MUST select a category_index from the numbered list.
+- Select the best matching subcategory_index. If none fit, use -1.
+- Do NOT invent new categories or subcategories.
+- Return ONLY a JSON object. No explanation, no markdown, no extra keys.
+
+Response format:
+{"category_index": <int>, "subcategory_index": <int or -1>, "confidence": <float 0.0-1.0>}"""
 
 
 def _extract_type(
