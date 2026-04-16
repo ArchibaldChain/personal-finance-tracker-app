@@ -1,6 +1,7 @@
 import json
 import logging
-from datetime import datetime
+from datetime import date
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.models.import_model import Import
 from app.models.import_row_model import ImportRow
 from app.models.transaction_model import Transaction
 from app.parsers import registry
+from app.parsers.base import ParsedRow
 from app.services import category_service
 from app.services.classification import get_classifier
 from app.services.classification.category_tree import build_category_tree, build_category_type_map
@@ -35,18 +37,34 @@ def create_import(db: Session, source_name: str, file_name: str, ledger_id: int 
 
 
 def store_raw_rows(
-    db: Session, import_id: int, raw_rows: list[tuple[int, dict]]
+    db: Session,
+    import_id: int,
+    parse_results: list[tuple[int, dict, "ParsedRow | Exception"]],
 ) -> None:
-    """Bulk-insert raw CSV row data into import_rows."""
-    rows = [
-        ImportRow(
+    """Bulk-insert raw CSV row data and parsed results into import_rows."""
+    rows = []
+    for row_index, raw_dict, result in parse_results:
+        if isinstance(result, ParsedRow):
+            parsed_json = json.dumps({
+                "transaction_date": result.transaction_date.isoformat(),
+                "posted_date": result.posted_date.isoformat() if result.posted_date else None,
+                "amount": str(result.amount),
+                "description": result.description,
+                "currency": result.currency,
+                "external_id": result.external_id,
+                "merchant_raw": result.merchant_raw,
+                "notes": result.notes,
+            })
+        else:
+            parsed_json = None
+        rows.append(ImportRow(
             import_id=import_id,
             row_index=row_index,
             raw_json=json.dumps(raw_dict),
             parse_status="pending",
-        )
-        for row_index, raw_dict in raw_rows
-    ]
+            parsed_json=parsed_json,
+        ))
+
     db.bulk_save_objects(rows)
 
     # Update total_rows count
@@ -121,7 +139,19 @@ def process_import(db: Session, import_id: int) -> Import:
     for row in rows:
         raw = json.loads(row.raw_json)
         try:
-            parsed = parser.parse_row(raw)
+            if row.parsed_json is None:
+                raise ValueError(f"Import row {row.id} has no parsed_json — was it uploaded correctly?")
+            d = json.loads(row.parsed_json)
+            parsed = ParsedRow(
+                transaction_date=date.fromisoformat(d["transaction_date"]),
+                posted_date=date.fromisoformat(d["posted_date"]) if d.get("posted_date") else None,
+                amount=Decimal(d["amount"]),
+                description=d["description"],
+                currency=d.get("currency", "USD"),
+                external_id=d.get("external_id"),
+                merchant_raw=d.get("merchant_raw"),
+                notes=d.get("notes"),
+            )
 
             transaction_type: str | None = None
             category: str | None = None

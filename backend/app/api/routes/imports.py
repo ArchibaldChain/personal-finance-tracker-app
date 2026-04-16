@@ -35,8 +35,7 @@ async def upload_import(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read CSV: {e}")
 
-    raw_rows = [(row_index, raw_dict) for row_index, raw_dict, _ in parse_results]
-    import_service.store_raw_rows(db, import_record.id, raw_rows)
+    import_service.store_raw_rows(db, import_record.id, parse_results)
 
     db.refresh(import_record)
     return ImportRead.model_validate(import_record)

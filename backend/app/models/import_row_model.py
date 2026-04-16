@@ -17,6 +17,7 @@ class ImportRow(Base):
         String(50), default="pending", nullable=False
     )
     parse_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parsed_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     import_: Mapped["Import"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Import", back_populates="rows"
