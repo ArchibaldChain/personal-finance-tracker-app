@@ -1,11 +1,15 @@
 # Personal Finance Tracker
 
-A local personal finance tracking app. Import CSVs from multiple banks, manually add/edit transactions, and view/search/filter your spending.
+A local personal finance app. Import CSVs from multiple banks, manually add/edit transactions, auto-categorize with rules or LLM, and view/search/filter your spending.
 
 ## Stack
 
-- **Backend:** Python + FastAPI, SQLite, SQLAlchemy, Alembic, Pydantic, `uv`
-- **Frontend:** React + TypeScript + Vite
+| Layer | Tech |
+|-------|------|
+| Backend | Python + FastAPI, SQLite, SQLAlchemy, Alembic, Pydantic |
+| Frontend | React + TypeScript + Vite, Recharts |
+| Package managers | `uv` (Python), npm (Node) |
+| Optional | OpenAI GPT-4o-mini for transaction classification |
 
 ---
 
@@ -14,7 +18,7 @@ A local personal finance tracking app. Import CSVs from multiple banks, manually
 ### Prerequisites
 
 - Python 3.11+
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - Node.js 18+
 
 ### Backend
@@ -34,23 +38,22 @@ uv run alembic upgrade head
 # (Optional) Seed sample transactions
 uv run python sample_data/seed_transactions.py
 
-# Start dev server
+# Start dev server with hot reload
 uv run uvicorn app.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`.
+API: `http://localhost:8000`  
 Interactive docs: `http://localhost:8000/docs`
 
 ### Frontend
 
 ```bash
 cd frontend
-
 npm install
 npm run dev -- --host
 ```
 
-The app will be available at `http://localhost:5173`.
+App: `http://localhost:5173`
 
 ---
 
@@ -58,30 +61,31 @@ The app will be available at `http://localhost:5173`.
 
 ```bash
 cd backend
-uv run pytest -v
+uv run pytest -v                                          # all tests
+uv run pytest tests/test_parsers.py -v                    # parser tests
+uv run pytest tests/test_import_flow.py -v                # import pipeline
+uv run pytest tests/test_transaction_service.py -v        # CRUD tests
 ```
 
 ---
 
-## Sample CSV Files
+## Supported CSV Formats
 
-Two sample CSV files are provided in `backend/sample_data/`:
+| Key | Institution | Notes |
+|-----|-------------|-------|
+| `chase` | Chase Bank | Standard export |
+| `bofa` | Bank of America | Skips non-data header lines |
+| `bmo` | BMO | Chequing + cash accounts |
+| `wealthsimple` | Wealthsimple | Investment + cash accounts |
+| `walmart_rewards` | Walmart Rewards Mastercard | |
 
-| File | Institution | Format |
-|------|-------------|--------|
-| `chase_sample.csv` | Chase Bank | `Transaction Date, Post Date, Description, Category, Type, Amount, Memo` |
-| `bofa_sample.csv` | Bank of America | `Date, Description, Amount, Running Bal.` (with leading header lines) |
-
-To try an import:
-1. Go to the **Import** page in the UI
-2. Select the institution from the dropdown
-3. Upload the corresponding sample CSV
+Sample files are in `backend/sample_data/`.
 
 ---
 
-## How to Add a New Bank Parser
+## Adding a New Bank Parser
 
-1. **Create a parser module** in `backend/app/parsers/`, e.g. `wells_fargo_parser.py`:
+1. Create `backend/app/parsers/my_bank_parser.py`:
 
 ```python
 from app.parsers.base import BaseParser, ParsedRow
@@ -89,7 +93,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-class WellsFargoParser(BaseParser):
+class MyBankParser(BaseParser):
     def get_column_mapping(self) -> dict[str, str]:
         return {
             "transaction_date": "Date",
@@ -98,34 +102,45 @@ class WellsFargoParser(BaseParser):
         }
 
     def parse_row(self, raw: dict[str, Any]) -> ParsedRow:
-        transaction_date = datetime.strptime(raw["Date"].strip(), "%m/%d/%Y").date()
-        amount = Decimal(str(raw["Amount"]).strip().replace(",", ""))
-        description = raw.get("Description", "").strip()
         return ParsedRow(
-            transaction_date=transaction_date,
-            amount=amount,
-            description=description,
-            merchant_raw=description or None,
+            transaction_date=datetime.strptime(raw["Date"].strip(), "%m/%d/%Y").date(),
+            amount=Decimal(str(raw["Amount"]).strip().replace(",", "")),
+            merchant_raw=raw.get("Description", "").strip() or None,
         )
 ```
 
-2. **Register it** in `backend/app/parsers/__init__.py`:
+2. Register it in `backend/app/parsers/__init__.py`:
 
 ```python
-from app.parsers.wells_fargo_parser import WellsFargoParser
-registry.register("wells_fargo", WellsFargoParser)
+from app.parsers.my_bank_parser import MyBankParser
+registry.register("my_bank", MyBankParser)
 ```
 
-3. The new source will automatically appear in the Import page dropdown (via `GET /sources`).
+The new source will appear in the Import dropdown automatically (via `GET /sources`).
 
-> **BofA-style headers:** If the CSV has leading non-data header lines, override `parse_csv()` as shown in `bofa_parser.py`.
+> If the CSV has non-data header lines (like BofA), override `parse_csv()` to skip them. See `bofa_parser.py`.
 
 ---
 
-## Extension Points
+## LLM Auto-Categorization
 
-The codebase has comments marking where future features can be added:
+Set in `backend/.env`:
 
-- **LLM categorization** — `import_service.process_import()`, between parse and transaction save
-- **Deduplication** — `transaction_service.create_transaction()`, check `external_id` before insert
-- **Plaid ingestion** — new `source_type="plaid"`, same `transactions` table, new service module
+```
+OPENAI_API_KEY=sk-...
+CLASSIFICATION_ENABLED=true
+CLASSIFICATION_MODEL=gpt-4o-mini
+```
+
+When enabled, imported transactions are classified against your category tree using GPT-4o-mini. A rule-based classifier also runs for free (always on). Results include a confidence score; low-confidence transactions are flagged for review.
+
+---
+
+## Documentation
+
+| File | Contents |
+|------|----------|
+| `docs/design.md` | Architecture, patterns, design decisions |
+| `docs/spec.md` | Feature spec, full API reference, data models |
+| `docs/development-manual.md` | Deep-dive data flows, parser system, test setup |
+| `docs/default_category.md` | Default category taxonomy |
