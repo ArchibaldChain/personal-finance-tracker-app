@@ -13,9 +13,16 @@ export interface LedgerRead {
   owner: User;
 }
 
+export interface FailedRow {
+  row_index: number;
+  raw_data: Record<string, string>;
+  error: string;
+}
+
 export interface Import {
   id: number;
   source_name: string;
+  source_display_name: string;
   file_name: string;
   uploaded_at: string;
   status: string;
@@ -117,4 +124,65 @@ export interface CategoryListResponse {
 export interface Source {
   key: string;
   display_name: string;
+  is_custom?: boolean;
+}
+
+// Custom parser types
+
+export interface CustomParserConfig {
+  id: number;
+  name: string;
+  skip_rows: number;
+  column_mapping_json: string;
+  amount_mode: 'single' | 'split';
+  debit_column: string | null;
+  credit_column: string | null;
+  date_format: string;
+  currency: string;
+  account_type: 'debit' | 'credit' | 'investment';
+  column_signature: string | null;
+  ledger_id: number | null;
+  created_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ParsedRowField =
+  | 'transaction_date'
+  | 'amount'
+  | 'description'
+  | 'merchant_raw'
+  | 'posted_date'
+  | 'notes'
+  | 'ignore';
+
+export interface PreviewRow {
+  row_index: number;
+  raw: Record<string, string>;
+  parsed: Record<string, string | null> | null;
+  error: string | null;
+}
+
+export interface PreviewResponse {
+  rows: PreviewRow[];
+  total_rows: number;
+}
+
+export interface DetectResponse {
+  match: CustomParserConfig | null;
+  headers: string[];
+}
+
+export interface CustomParserCreatePayload {
+  name: string;
+  skip_rows: number;
+  column_mapping: Record<string, string>;
+  amount_mode: 'single' | 'split';
+  debit_column: string | null;
+  credit_column: string | null;
+  date_format: string;
+  currency: string;
+  account_type: 'debit' | 'credit' | 'investment';
+  csv_headers: string[];
+  ledger_id: number | null;
 }

@@ -10,15 +10,32 @@ logger = logging.getLogger(__name__)
 from app.config import get_settings
 from app.models.category_model import Category, Subcategory
 from app.models.classification_log_model import ClassificationLog
+from app.models.custom_parser_config_model import CustomParserConfig
 from app.models.import_model import Import
 from app.models.import_row_model import ImportRow
 from app.models.transaction_model import Transaction
 from app.parsers import registry
-from app.parsers.base import ParsedRow
+from app.parsers.base import BaseParser, ParsedRow
+from app.parsers.dynamic_parser import DynamicParser
 from app.services import category_service
 from app.services.classification import get_classifier
 from app.services.classification.category_tree import build_category_tree, build_category_type_map
 from app.services.classification.simple_classifier import SimpleClassifier
+
+
+def _get_parser(db: Session, source_name: str) -> BaseParser:
+    """Return the right parser for a source name.
+
+    Built-in parsers are looked up in the registry.
+    Custom parsers (source_name starts with 'custom_') are loaded from the DB.
+    """
+    if source_name.startswith("custom_"):
+        config_id = int(source_name.removeprefix("custom_"))
+        config = db.query(CustomParserConfig).filter_by(id=config_id).first()
+        if not config:
+            raise ValueError(f"Custom parser config {config_id} not found")
+        return DynamicParser(config)
+    return registry.get(source_name)
 
 
 def create_import(db: Session, source_name: str, file_name: str, ledger_id: int | None = None) -> Import:
@@ -93,7 +110,7 @@ def process_import(db: Session, import_id: int) -> Import:
     import_record.status = "processing"
     db.commit()
 
-    parser = registry.get(import_record.source_name)
+    parser = _get_parser(db, import_record.source_name)
     rows = db.query(ImportRow).filter(ImportRow.import_id == import_id).all()
 
     # Build classifiers and category tree once for the whole batch.

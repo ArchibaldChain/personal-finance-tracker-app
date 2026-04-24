@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { deleteImport, listImports } from '../api/imports';
 import ImportForm from '../components/ImportForm';
 import ImportHistoryTable from '../components/ImportHistoryTable';
@@ -22,7 +23,7 @@ export default function ImportPage() {
     fetchImports();
   }, [fetchImports]);
 
-  const handleDelete = useCallback(async (id: number) => {
+  const handleDeleteImport = useCallback(async (id: number) => {
     try {
       await deleteImport(id);
       setImports((prev) => prev.filter((imp) => imp.id !== id));
@@ -35,12 +36,21 @@ export default function ImportPage() {
   return (
     <div>
       <ImportForm onSuccess={fetchImports} ledgerId={ledgerId ?? undefined} />
+      <div style={{ marginTop: 12, fontSize: 13, color: '#6b6560' }}>
+        Using a bank not in the list?{' '}
+        <Link to="/import/custom" style={{ color: '#c9a84c', fontWeight: 500 }}>
+          Set up a custom CSV format →
+        </Link>
+      </div>
+
       <div style={{ marginTop: 32 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#2d2116', marginBottom: 12, marginTop: 0 }}>
-          Import History
-        </h2>
-        <ImportHistoryTable imports={imports} onDelete={handleDelete} />
+        <h2 style={sectionTitle}>Import History</h2>
+        <ImportHistoryTable imports={imports} onDelete={handleDeleteImport} />
       </div>
     </div>
   );
 }
+
+const sectionTitle: React.CSSProperties = {
+  fontSize: 16, fontWeight: 600, color: '#2d2116', marginBottom: 12, marginTop: 0,
+};

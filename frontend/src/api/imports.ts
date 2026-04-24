@@ -1,4 +1,4 @@
-import type { Import, ImportListResponse } from '../types';
+import type { FailedRow, Import, ImportListResponse } from '../types';
 import client from './client';
 
 export async function uploadImport(file: File, sourceName: string, ledgerId?: number): Promise<Import> {
@@ -31,4 +31,9 @@ export async function getImport(id: number): Promise<Import> {
 
 export async function deleteImport(id: number): Promise<void> {
   await client.delete(`/imports/${id}`);
+}
+
+export async function getFailedRows(id: number): Promise<FailedRow[]> {
+  const resp = await client.get<FailedRow[]>(`/imports/${id}/failed-rows`);
+  return resp.data;
 }

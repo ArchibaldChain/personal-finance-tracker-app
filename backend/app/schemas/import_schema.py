@@ -8,6 +8,7 @@ class ImportRead(BaseModel):
 
     id: int
     source_name: str
+    source_display_name: str = ""
     file_name: str
     uploaded_at: datetime
     status: str
@@ -21,3 +22,9 @@ class ImportRead(BaseModel):
 class ImportListResponse(BaseModel):
     items: list[ImportRead]
     total: int
+
+
+class FailedRowRead(BaseModel):
+    row_index: int
+    raw_data: dict
+    error: str
