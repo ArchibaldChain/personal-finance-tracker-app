@@ -18,9 +18,12 @@ Feature requirements, API contract, and data models for the personal finance tra
 ### F2 — CSV Import
 
 - Upload a CSV from Chase, Bank of America, BMO, Wealthsimple, or Walmart Rewards
+- Define custom CSV parsers via a wizard (column mapping, date format, currency, account type)
+- Custom parsers are saved by name and reused across imports; matched automatically by column signature
 - Preview row count before processing
 - Process import: parse rows, create transactions, report parse errors per row
-- View import history with status badges (pending / processed / processed_with_errors)
+- View import history with status badges (pending / processing / processed / processed_with_errors / failed)
+- Click failed count in history to expand inline row-level error details
 - Re-importable: raw rows are preserved, can be reprocessed if parser is updated
 
 ### F3 — Auto-Categorization
@@ -142,32 +145,110 @@ Soft delete (sets `is_deleted = true`).
 
 #### `POST /imports`
 
-Upload a CSV file.
+Upload a CSV file. Parses the CSV immediately and stores raw rows.
 
 **Form data (multipart):**
 - `file` — CSV file
-- `source_name` — Parser key (e.g., `"chase"`, `"wealthsimple"`)
+- `source_name` — Parser key (e.g., `"chase"`, `"wealthsimple"`, `"custom_7"`)
 - `ledger_id` *(optional)* — Target ledger
 
 **Response:** `ImportRead` with `status = "pending"`, `total_rows = N`
+
+**Errors (400):** unknown source key, custom parser config not found, CSV unreadable. On CSV parse failure the import record is saved with `status = "failed"` before returning the error.
 
 #### `GET /imports`
 
 List all imports, most recent first.
 
+**Query parameters:** `ledger_id` *(optional)*
+
 #### `GET /imports/{id}`
 
 Get a single import with row counts.
+
+#### `GET /imports/{id}/failed-rows`
+
+Returns rows that failed parsing during upload or processing.
+
+**Response:** `list[FailedRowRead]`
+```json
+[
+  { "row_index": 3, "raw_data": { "Date": "2026-01-15", ... }, "error": "invalid date format" }
+]
+```
 
 #### `POST /imports/{id}/process`
 
 Re-parse stored raw rows and create transactions.
 
-**Response:** `ImportRead` with updated `parsed_rows`, `failed_rows`, and final `status`.
+**Response:** `ImportRead` with updated `parsed_rows`, `failed_rows`, and final `status`. Sets `status = "failed"` on unexpected error.
 
 #### `DELETE /imports/{id}`
 
-Delete the import record. Does not delete transactions already created from it.
+Hard-delete the import record, its raw rows, and all transactions created from it.
+
+---
+
+### Custom Parsers
+
+#### `GET /custom-parsers`
+
+List all saved custom parser configs.
+
+**Query parameters:** `ledger_id` *(optional)*
+
+#### `POST /custom-parsers`
+
+Save a new custom parser config.
+
+**Body:** `CustomParserConfigCreate`
+```json
+{
+  "name": "My Credit Union",
+  "skip_rows": 1,
+  "column_mapping": { "transaction_date": "Date", "amount": "Amount", "description": "Details" },
+  "date_format": "%Y-%m-%d",
+  "currency": "CAD",
+  "account_type": "debit",
+  "csv_headers": ["Date", "Amount", "Details"],
+  "ledger_id": 1
+}
+```
+
+`column_mapping` maps ParsedRow field names → CSV column headers. Multiple description columns are joined with `|` (e.g. `"description": "Narration|Reference"`).
+
+#### `GET /custom-parsers/{id}`
+
+Get a single config.
+
+#### `PUT /custom-parsers/{id}`
+
+Replace a config.
+
+#### `DELETE /custom-parsers/{id}`
+
+Delete a config (204). Existing transactions imported with it are unaffected.
+
+#### `POST /custom-parsers/preview`
+
+Stateless: parse up to 10 rows with a given config — no DB writes.
+
+**Form data (multipart):** `file` (CSV) + `config` (JSON string of config fields)
+
+**Response:** `PreviewResponse`
+```json
+{ "rows": [ { "transaction_date": "2026-01-15", "amount": "-42.50", ... } ], "total_rows": 87 }
+```
+
+#### `POST /custom-parsers/detect`
+
+Match uploaded CSV headers against saved configs by column signature.
+
+**Form data (multipart):** `file` + optional `ledger_id` + optional `skip_rows`
+
+**Response:** `DetectResponse`
+```json
+{ "match": { ...CustomParserConfigRead } | null, "headers": ["Date", "Amount", ...], "preview_rows": [ {...} ] }
 
 ---
 
@@ -227,9 +308,17 @@ Reorder categories by providing a list of `{ id, sort_order }` pairs.
 
 #### `GET /sources`
 
-Returns all registered parser keys. Used to populate the import form dropdown.
+Returns all available parser sources (built-in + custom). Used to populate the import form dropdown.
 
-**Response:** `["bofa", "bmo", "chase", "wealthsimple", "walmart_rewards"]`
+**Query parameters:** `ledger_id` *(optional)* — includes custom parsers for that ledger
+
+**Response:**
+```json
+{ "sources": [
+  { "key": "chase", "display_name": "Chase", "is_custom": false },
+  { "key": "custom_3", "display_name": "My Credit Union", "is_custom": true }
+] }
+```
 
 #### `GET /sources/used`
 
@@ -312,14 +401,30 @@ Returns `{ "status": "ok" }`.
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | int | PK |
-| `source_name` | string | Parser key |
+| `source_name` | string | Parser key (`"chase"`, `"custom_7"`, etc.) |
 | `file_name` | string | Original filename |
 | `uploaded_at` | datetime | |
-| `status` | string | `pending` / `processing` / `processed` / `processed_with_errors` |
+| `status` | string | `pending` / `processing` / `processed` / `processed_with_errors` / `failed` |
 | `total_rows` | int? | Set after upload |
 | `parsed_rows` | int | Successful parses |
 | `failed_rows` | int | Failed parses |
 | `ledger_id` | int? | FK → ledgers |
+
+### CustomParserConfig
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | int | PK |
+| `name` | string | User-chosen display name |
+| `ledger_id` | int? | FK → ledgers, nullable |
+| `skip_rows` | int | Header rows to skip (default 0) |
+| `column_mapping_json` | text | JSON: `{field → csv_column}` |
+| `date_format` | string | strptime format (default `"%m/%d/%Y"`) |
+| `currency` | string | Default `"CAD"` |
+| `account_type` | string | `"debit"`, `"credit"`, or `"investment"` |
+| `column_signature` | string? | `"\|".join(sorted(headers))` for auto-match |
+| `csv_headers` | text? | JSON array of original header names |
+| `created_at` / `updated_at` | datetime | |
 
 ### Category
 

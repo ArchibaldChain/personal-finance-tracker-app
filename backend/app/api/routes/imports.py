@@ -65,6 +65,8 @@ async def upload_import(
     try:
         parse_results = parser.parse_csv(content)
     except Exception as e:
+        import_record.status = "failed"
+        db.commit()
         raise HTTPException(status_code=400, detail=f"Failed to read CSV: {e}")
 
     import_service.store_raw_rows(db, import_record.id, parse_results)

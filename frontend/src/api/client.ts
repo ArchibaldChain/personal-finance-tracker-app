@@ -18,4 +18,18 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+client.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const status = err?.response?.status;
+    const detail = err?.response?.data?.detail;
+    if (detail) {
+      const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
+      const truncated = msg.length > 80 ? msg.slice(0, 80) + '…' : msg;
+      err.message = status ? `${status} — ${truncated}` : truncated;
+    }
+    return Promise.reject(err);
+  },
+);
+
 export default client;

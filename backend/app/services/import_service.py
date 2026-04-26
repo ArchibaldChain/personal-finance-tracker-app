@@ -110,172 +110,176 @@ def process_import(db: Session, import_id: int) -> Import:
 
     import_record.status = "processing"
     db.commit()
+    try:
+        parser = _get_parser(db, import_record.source_name)
+        rows = db.query(ImportRow).filter(ImportRow.import_id == import_id).all()
 
-    parser = _get_parser(db, import_record.source_name)
-    rows = db.query(ImportRow).filter(ImportRow.import_id == import_id).all()
+        # Build classifiers and category tree once for the whole batch.
+        # SimpleClassifier runs first (free, instant); LLM is the fallback.
+        classifier = None
+        category_tree: dict[str, list[str]] = {}
+        category_type_map: dict[str, str] = {}
+        # name → id lookup maps for FK resolution
+        cat_name_to_id: dict[str, int] = {}
+        sub_name_to_id: dict[tuple[int, str], int] = {}  # (category_id, subname) → sub_id
+        settings = get_settings()
+        if settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
+            classifier = get_classifier()
+            all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
+            category_tree = build_category_tree(all_categories)
+            category_type_map = build_category_type_map(all_categories)
+        elif settings.CLASSIFICATION_ENABLED:
+            all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
+            category_tree = build_category_tree(all_categories)
+            category_type_map = build_category_type_map(all_categories)
+        else:
+            all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
 
-    # Build classifiers and category tree once for the whole batch.
-    # SimpleClassifier runs first (free, instant); LLM is the fallback.
-    classifier = None
-    category_tree: dict[str, list[str]] = {}
-    category_type_map: dict[str, str] = {}
-    # name → id lookup maps for FK resolution
-    cat_name_to_id: dict[str, int] = {}
-    sub_name_to_id: dict[tuple[int, str], int] = {}  # (category_id, subname) → sub_id
-    settings = get_settings()
-    if settings.CLASSIFICATION_ENABLED and settings.OPENAI_API_KEY:
-        classifier = get_classifier()
-        all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
-        category_tree = build_category_tree(all_categories)
-        category_type_map = build_category_type_map(all_categories)
-    elif settings.CLASSIFICATION_ENABLED:
-        all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
-        category_tree = build_category_tree(all_categories)
-        category_type_map = build_category_type_map(all_categories)
-    else:
-        all_categories = category_service.list_categories(db, ledger_id=import_record.ledger_id)
+        # Build name→id maps once for the batch
+        for cat in all_categories:
+            cat_name_to_id[cat.name] = cat.id
+            for sub in cat.subcategories:
+                sub_name_to_id[(cat.id, sub.name)] = sub.id
 
-    # Build name→id maps once for the batch
-    for cat in all_categories:
-        cat_name_to_id[cat.name] = cat.id
-        for sub in cat.subcategories:
-            sub_name_to_id[(cat.id, sub.name)] = sub.id
+        pre_classifier = SimpleClassifier() if category_tree else None
+        logger.info(
+            "import=%d source=%s rows=%d pre_classifier=%s llm_classifier=%s",
+            import_id,
+            import_record.source_name,
+            len(rows),
+            "enabled" if pre_classifier else "disabled",
+            classifier._model if classifier else "disabled",
+        )
 
-    pre_classifier = SimpleClassifier() if category_tree else None
-    logger.info(
-        "import=%d source=%s rows=%d pre_classifier=%s llm_classifier=%s",
-        import_id,
-        import_record.source_name,
-        len(rows),
-        "enabled" if pre_classifier else "disabled",
-        classifier._model if classifier else "disabled",
-    )
+        parsed_count = 0
+        failed_count = 0
 
-    parsed_count = 0
-    failed_count = 0
+        for row in rows:
+            if row.parse_status == "failed":
+                failed_count += 1
+                continue
+            try:
+                if row.parsed_json is None:
+                    raise ValueError(f"Import row {row.id} has no parsed_json — was it uploaded correctly?")
+                d = json.loads(row.parsed_json)
+                parsed = ParsedRow(
+                    transaction_date=date.fromisoformat(d["transaction_date"]),
+                    posted_date=date.fromisoformat(d["posted_date"]) if d.get("posted_date") else None,
+                    amount=Decimal(d["amount"]),
+                    description=d["description"],
+                    currency=d.get("currency", "USD"),
+                    external_id=d.get("external_id"),
+                    merchant_raw=d.get("merchant_raw"),
+                    notes=d.get("notes"),
+                )
 
-    for row in rows:
-        if row.parse_status == "failed":
-            failed_count += 1
-            continue
-        raw = json.loads(row.raw_json)
-        try:
-            if row.parsed_json is None:
-                raise ValueError(f"Import row {row.id} has no parsed_json — was it uploaded correctly?")
-            d = json.loads(row.parsed_json)
-            parsed = ParsedRow(
-                transaction_date=date.fromisoformat(d["transaction_date"]),
-                posted_date=date.fromisoformat(d["posted_date"]) if d.get("posted_date") else None,
-                amount=Decimal(d["amount"]),
-                description=d["description"],
-                currency=d.get("currency", "USD"),
-                external_id=d.get("external_id"),
-                merchant_raw=d.get("merchant_raw"),
-                notes=d.get("notes"),
-            )
+                transaction_type: str | None = None
+                category: str | None = None
+                subcategory: str | None = None
+                confidence: float | None = None
+                classifier_model: str | None = None
 
-            transaction_type: str | None = None
-            category: str | None = None
-            subcategory: str | None = None
-            confidence: float | None = None
-            classifier_model: str | None = None
+                # Apply hard type rules from the parser regardless of whether classification is on
+                forced_type = parser.infer_transaction_type(parsed)
+                if forced_type is not None:
+                    transaction_type = forced_type.value
 
-            # Apply hard type rules from the parser regardless of whether classification is on
-            forced_type = parser.infer_transaction_type(parsed)
-            if forced_type is not None:
-                transaction_type = forced_type.value
+                if category_tree:
+                    seen: set[str] = set()
+                    parts: list[str] = []
+                    for p in [parsed.merchant_raw, parsed.description, parsed.notes, f"Amount {parsed.amount} {parsed.currency}"]:
+                        if p and p not in seen:
+                            seen.add(p)
+                            parts.append(p)
+                    desc = " ".join(parts)
+                    if desc:
+                        if pre_classifier:
+                            result = pre_classifier.classify(desc, category_tree, category_type_map, forced_type)
+                            if result["confidence"] > 0.0:
+                                transaction_type = result["transaction_type"]
+                                category = result["category"]
+                                subcategory = result["subcategory"]
+                                confidence = result["confidence"]
+                                classifier_model = "simple"
+                                logger.debug(
+                                    "pre_classifier hit: %r -> %s / %s / %s",
+                                    desc, transaction_type, category, subcategory,
+                                )
 
-            if category_tree:
-                seen: set[str] = set()
-                parts: list[str] = []
-                for p in [parsed.merchant_raw, parsed.description, parsed.notes, f"Amount {parsed.amount} {parsed.currency}"]:
-                    if p and p not in seen:
-                        seen.add(p)
-                        parts.append(p)
-                desc = " ".join(parts)
-                if desc:
-                    if pre_classifier:
-                        result = pre_classifier.classify(desc, category_tree, category_type_map, forced_type)
-                        if result["confidence"] > 0.0:
+                        if confidence is None and classifier:
+                            logger.debug("pre_classifier miss, calling LLM for: %r", desc)
+                            result = classifier.classify(desc, category_tree, category_type_map, forced_type)
                             transaction_type = result["transaction_type"]
                             category = result["category"]
                             subcategory = result["subcategory"]
                             confidence = result["confidence"]
-                            classifier_model = "simple"
+                            classifier_model = classifier._model
                             logger.debug(
-                                "pre_classifier hit: %r -> %s / %s / %s",
-                                desc, transaction_type, category, subcategory,
+                                "llm classifier: %r -> %s / %s / %s (confidence=%.2f)",
+                                desc, transaction_type, category, subcategory, confidence or 0.0,
                             )
 
-                    if confidence is None and classifier:
-                        logger.debug("pre_classifier miss, calling LLM for: %r", desc)
-                        result = classifier.classify(desc, category_tree, category_type_map, forced_type)
-                        transaction_type = result["transaction_type"]
-                        category = result["category"]
-                        subcategory = result["subcategory"]
-                        confidence = result["confidence"]
-                        classifier_model = classifier._model
-                        logger.debug(
-                            "llm classifier: %r -> %s / %s / %s (confidence=%.2f)",
-                            desc, transaction_type, category, subcategory, confidence or 0.0,
-                        )
+                # Extension point: deduplication check on external_id can go here.
 
-            # Extension point: deduplication check on external_id can go here.
+                # Resolve category/subcategory names to FK IDs
+                cat_id = cat_name_to_id.get(category) if category else None
+                sub_id = sub_name_to_id.get((cat_id, subcategory)) if (cat_id and subcategory) else None
 
-            # Resolve category/subcategory names to FK IDs
-            cat_id = cat_name_to_id.get(category) if category else None
-            sub_id = sub_name_to_id.get((cat_id, subcategory)) if (cat_id and subcategory) else None
+                transaction = Transaction(
+                    import_id=import_id,
+                    source_type="csv",
+                    source_name=import_record.source_name,
+                    external_id=parsed.external_id,
+                    transaction_date=parsed.transaction_date,
+                    posted_date=parsed.posted_date,
+                    amount=float(parsed.amount),
+                    currency=parsed.currency,
+                    merchant_raw=parsed.merchant_raw,
+                    merchant_normalized=parsed.merchant_raw,
+                    description=parsed.description,
+                    transaction_type=transaction_type,
+                    category_id=cat_id,
+                    subcategory_id=sub_id,
+                    classification_confidence=confidence,
+                    notes=parsed.notes,
+                    is_deleted=False,
+                    ledger_id=import_record.ledger_id,
+                )
+                db.add(transaction)
 
-            transaction = Transaction(
-                import_id=import_id,
-                source_type="csv",
-                source_name=import_record.source_name,
-                external_id=parsed.external_id,
-                transaction_date=parsed.transaction_date,
-                posted_date=parsed.posted_date,
-                amount=float(parsed.amount),
-                currency=parsed.currency,
-                merchant_raw=parsed.merchant_raw,
-                merchant_normalized=parsed.merchant_raw,  # raw used as initial normalized value
-                description=parsed.description,
-                transaction_type=transaction_type,
-                category_id=cat_id,
-                subcategory_id=sub_id,
-                classification_confidence=confidence,
-                notes=parsed.notes,
-                is_deleted=False,
-                ledger_id=import_record.ledger_id,
-            )
-            db.add(transaction)
+                if confidence is not None:
+                    db.add(ClassificationLog(
+                        description=desc,
+                        category=category,
+                        subcategory=subcategory,
+                        confidence=confidence,
+                        model=classifier_model,
+                    ))
 
-            if confidence is not None:
-                db.add(ClassificationLog(
-                    description=desc,
-                    category=category,
-                    subcategory=subcategory,
-                    confidence=confidence,
-                    model=classifier_model,
-                    # transaction_id is None here — ID not available until batch commit
-                ))
+                row.parse_status = "success"
+                parsed_count += 1
 
-            row.parse_status = "success"
-            parsed_count += 1
+            except Exception as e:
+                row.parse_status = "failed"
+                row.parse_error = str(e)
+                failed_count += 1
 
-        except Exception as e:
-            row.parse_status = "failed"
-            row.parse_error = str(e)
-            failed_count += 1
+        import_record.parsed_rows = parsed_count
+        import_record.failed_rows = failed_count
+        import_record.status = "processed" if failed_count == 0 else "processed_with_errors"
+        logger.info(
+            "import=%d done: parsed=%d failed=%d status=%s",
+            import_id, parsed_count, failed_count, import_record.status,
+        )
+        db.commit()
+        db.refresh(import_record)
+        return import_record
 
-    import_record.parsed_rows = parsed_count
-    import_record.failed_rows = failed_count
-    import_record.status = "processed" if failed_count == 0 else "processed_with_errors"
-    logger.info(
-        "import=%d done: parsed=%d failed=%d status=%s",
-        import_id, parsed_count, failed_count, import_record.status,
-    )
-    db.commit()
-    db.refresh(import_record)
-    return import_record
+    except Exception as e:
+        logger.error("import=%d unexpected error: %s", import_id, e)
+        import_record.status = "failed"
+        db.commit()
+        raise
 
 
 def delete_import(db: Session, import_id: int) -> None:

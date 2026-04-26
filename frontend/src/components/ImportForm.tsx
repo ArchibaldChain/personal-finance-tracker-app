@@ -66,13 +66,13 @@ export default function ImportForm({ onSuccess, ledgerId }: ImportFormProps) {
     setStatus(null);
     try {
       const importRecord = await uploadImport(file, selectedSource, ledgerId);
-      const processed = await processImport(importRecord.id);
-      setStatus({
-        type: 'success',
-        message: `Import complete: ${processed.parsed_rows} rows imported${
-          processed.failed_rows > 0 ? `, ${processed.failed_rows} failed` : ''
-        }.`,
-      });
+      try {
+        await processImport(importRecord.id);
+      } catch {
+        onSuccess(); // re-fetch list to show the failed import in history
+        throw new Error('Processing failed — the file was removed. Check the format and try again.');
+      }
+      setStatus({ type: 'success', message: 'Import complete.' });
       setFile(null);
       onSuccess();
     } catch (err: unknown) {

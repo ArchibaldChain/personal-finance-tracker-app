@@ -51,7 +51,7 @@ finance.db           ← SQLite database
 
 #### Registry Pattern — CSV Parsers
 
-Parsers register themselves at startup under a string key. The frontend never hardcodes institution names — it fetches `GET /sources`, which returns the live registry.
+Built-in parsers register themselves at startup under a string key. The frontend never hardcodes institution names — it fetches `GET /sources`, which merges the live registry with user-saved custom parsers from the DB.
 
 ```
 parsers/__init__.py  (imported at startup)
@@ -62,7 +62,17 @@ parsers/__init__.py  (imported at startup)
     └── registry.register("walmart_rewards", WalmartRewardsParser)
 ```
 
-Adding a new institution requires only: (1) create a parser class, (2) register it. No UI changes needed.
+Custom parsers are **not** registered. Instead, `source_name = "custom_<id>"` is resolved at runtime via `_get_parser()`, which looks up the `CustomParserConfig` row and instantiates `DynamicParser(config)`. This keeps startup free of DB reads.
+
+```python
+def _get_parser(db, source_name) -> BaseParser:
+    if source_name.startswith("custom_"):
+        config = db.query(CustomParserConfig).filter_by(id=...).first()
+        return DynamicParser(config)
+    return registry.get(source_name)
+```
+
+Adding a new built-in institution: (1) create a parser class, (2) register it. No UI changes needed. Adding a custom parser: use the `/import/custom` wizard in the UI.
 
 #### Two-Phase Import — Upload then Process
 
@@ -70,8 +80,10 @@ CSV import is intentionally split to preserve raw data even when parsing fails.
 
 ```
 Phase 1 — POST /imports
-  → Validate source, create import record (status=pending)
-  → Store ALL raw CSV rows as JSON in import_rows
+  → Validate source (_get_parser resolves built-in or custom)
+  → Create import record (status=pending)
+  → Parse CSV into raw rows; on parse failure → status=failed, return 400
+  → Store ALL raw rows as JSON in import_rows
   → Return immediately with row count
 
 Phase 2 — POST /imports/{id}/process
@@ -79,9 +91,12 @@ Phase 2 — POST /imports/{id}/process
   → On success: create Transaction
   → On failure: mark row failed, store error message
   → Update import status to processed / processed_with_errors
+  → On unexpected exception → status=failed
 ```
 
 The raw JSON in `import_rows` is the source of truth. Transactions can be regenerated from it. This also allows future re-processing with an updated parser.
+
+The frontend awaits `processImport` (not fire-and-forget). On a non-2xx response the import record remains in history with `status=failed` for visibility; no cleanup needed.
 
 #### Classification Cascade
 
@@ -171,8 +186,12 @@ Layout (nav)
     │       ├── AddTransactionModal
     │       └── EditTransactionModal
     ├── ImportPage
-    │       ├── ImportForm
-    │       └── ImportHistoryTable
+    │       ├── ImportForm (source dropdown with inline delete for custom parsers)
+    │       └── ImportHistoryTable (polls every 3s while any import is in-flight)
+    ├── CustomImportPage (3-step wizard: upload → configure → preview)
+    │       ├── CustomImportUploadStep
+    │       ├── CustomImportConfigStep (CSV preview table with per-column field selectors)
+    │       └── CustomImportPreviewStep
     ├── CategoriesPage    — category CRUD with icon picker
     ├── ProfilePage       — user profile
     └── LoginPage         — user picker
@@ -180,7 +199,9 @@ Layout (nav)
 
 ### API Client
 
-All backend calls go through `src/api/client.ts` (an Axios instance with `baseURL = /api`). Each domain has its own module (`transactions.ts`, `imports.ts`, `categories.ts`, `ledgers.ts`) that wraps typed Axios calls.
+All backend calls go through `src/api/client.ts` (an Axios instance with `baseURL = /api`). Each domain has its own module (`transactions.ts`, `imports.ts`, `categories.ts`, `customParsers.ts`, `ledgers.ts`) that wraps typed Axios calls.
+
+A response error interceptor extracts the FastAPI `detail` field from error responses and sets it as `err.message` (truncated to 80 chars), so all error handlers automatically surface readable backend messages rather than generic HTTP status strings.
 
 ---
 
@@ -188,7 +209,8 @@ All backend calls go through `src/api/client.ts` (an Axios instance with `baseUR
 
 | Feature | Where |
 |---------|-------|
-| New bank parser | Create `parsers/<bank>_parser.py`, register in `parsers/__init__.py` |
+| New built-in bank parser | Create `parsers/<bank>_parser.py`, register in `parsers/__init__.py` |
+| New custom parser (UI) | Use `/import/custom` wizard; saved as `CustomParserConfig` in DB |
 | New classifier | Extend `BaseClassifier`, wire into `classification/` chain |
 | Deduplication | `transaction_service.create_transaction()` — check `external_id` before insert |
 | Plaid / open banking | New `source_type="plaid"` service, same `transactions` table |

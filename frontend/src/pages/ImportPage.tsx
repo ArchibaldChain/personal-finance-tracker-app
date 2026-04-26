@@ -23,6 +23,14 @@ export default function ImportPage() {
     fetchImports();
   }, [fetchImports]);
 
+  // Poll every 3s while any import is still processing
+  useEffect(() => {
+    const inFlight = imports.some((imp) => imp.status === 'pending' || imp.status === 'processing');
+    if (!inFlight) return;
+    const timer = setTimeout(fetchImports, 3000);
+    return () => clearTimeout(timer);
+  }, [imports, fetchImports]);
+
   const handleDeleteImport = useCallback(async (id: number) => {
     try {
       await deleteImport(id);

@@ -163,11 +163,16 @@ export default function CustomImportPage() {
     setError(null);
     try {
       const importRecord = await uploadImport(file, `custom_${savedConfig.id}`, ledgerId ?? undefined);
-      await processImport(importRecord.id);
+      try {
+        await processImport(importRecord.id);
+      } catch {
+setError('Processing failed — the file was removed. Check the column mapping and try again.');
+        setIsImporting(false);
+        return;
+      }
       navigate('/import');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');
-    } finally {
       setIsImporting(false);
     }
   };
