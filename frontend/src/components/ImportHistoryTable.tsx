@@ -79,9 +79,9 @@ export default function ImportHistoryTable({ imports, onDelete }: ImportHistoryT
             return (
               <React.Fragment key={imp.id}>
                 <tr>
-                  <td style={styles.td}>{new Date(imp.uploaded_at).toLocaleString()}</td>
+                  <td style={styles.td}>{new Date(imp.uploaded_at.endsWith('Z') ? imp.uploaded_at : imp.uploaded_at + 'Z').toLocaleString()}</td>
                   <td style={styles.td}>{imp.source_display_name || imp.source_name}</td>
-                  <td style={styles.td}>{imp.file_name}</td>
+                  <td style={styles.td} title={imp.file_name}>{imp.file_name}</td>
                   <td style={styles.td}>
                     <span style={{ ...styles.badge, ...(STATUS_STYLES[imp.status] ?? {}) }}>
                       {STATUS_LABELS[imp.status] ?? imp.status}

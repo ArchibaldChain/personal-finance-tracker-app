@@ -53,9 +53,9 @@ class WalmartRewardsParser(BaseParser):
         r = {k.lower(): v for k, v in raw.items()}
 
         try:
-            transaction_date = datetime.strptime(self._get(r, "date"), self.DATE_FORMAT).date()
+            transaction_date = datetime.strptime(self._get(r, "date", "transaction date"), self.DATE_FORMAT).date()
         except ValueError as e:
-            raise ValueError(f"Invalid Date: {r.get('date')!r}") from e
+            raise ValueError(f"Invalid Date: {r.get('date') or r.get('transaction date')!r}") from e
 
         try:
             posted_date_str = self._get(r, "posted date")

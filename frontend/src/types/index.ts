@@ -134,9 +134,6 @@ export interface CustomParserConfig {
   name: string;
   skip_rows: number;
   column_mapping_json: string;
-  amount_mode: 'single' | 'split';
-  debit_column: string | null;
-  credit_column: string | null;
   date_format: string;
   currency: string;
   account_type: 'debit' | 'credit' | 'investment';
@@ -171,15 +168,13 @@ export interface PreviewResponse {
 export interface DetectResponse {
   match: CustomParserConfig | null;
   headers: string[];
+  preview_rows: Record<string, string>[];
 }
 
 export interface CustomParserCreatePayload {
   name: string;
   skip_rows: number;
   column_mapping: Record<string, string>;
-  amount_mode: 'single' | 'split';
-  debit_column: string | null;
-  credit_column: string | null;
   date_format: string;
   currency: string;
   account_type: 'debit' | 'credit' | 'investment';

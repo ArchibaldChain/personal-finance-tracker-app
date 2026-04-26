@@ -9,9 +9,6 @@ import client from './client';
 interface PreviewConfigPayload {
   skip_rows: number;
   column_mapping: Record<string, string>;
-  amount_mode: 'single' | 'split';
-  debit_column: string | null;
-  credit_column: string | null;
   date_format: string;
   currency: string;
   account_type: string;

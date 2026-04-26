@@ -85,9 +85,10 @@ async def detect_parser(
 ) -> DetectResponse:
     """Upload a CSV and find a saved parser whose column signature matches."""
     content = await file.read()
-    headers = custom_parser_service._read_csv_headers(content, skip_rows=skip_rows)
+    headers, preview_rows = custom_parser_service._read_csv_preview(content, skip_rows=skip_rows)
     match = custom_parser_service.find_matching_config(db, headers, ledger_id=ledger_id)
     return DetectResponse(
         match=CustomParserConfigRead.model_validate(match) if match else None,
         headers=headers,
+        preview_rows=preview_rows,
     )

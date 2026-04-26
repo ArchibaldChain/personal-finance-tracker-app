@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 def _parse_decimal(raw_value: str) -> Decimal:
     """Strip common currency formatting and parse to Decimal."""
-    cleaned = raw_value.strip().lstrip("$").replace(",", "").replace(" ", "")
+    cleaned = raw_value.strip().replace("$", "").replace(",", "").replace(" ", "")
     if not cleaned:
         raise ValueError(f"Empty amount value: {raw_value!r}")
     try:
@@ -68,11 +68,14 @@ class DynamicParser(BaseParser):
         if self._config.account_type == "credit":
             amount = -amount
 
-        # --- description (required) ---
+        # --- description (optional, may be pipe-joined multiple columns) ---
         desc_col = mapping.get("description")
-        description = raw.get(desc_col, "").strip() if desc_col else ""
-        if not description:
-            description = "(no description)"
+        if desc_col:
+            cols = [c.strip() for c in desc_col.split("|") if c.strip()]
+            parts = [raw.get(c, "").strip() for c in cols if raw.get(c, "").strip()]
+            description = " ".join(parts)
+        else:
+            description = ""
 
         # --- optional fields ---
         merchant_col = mapping.get("merchant_raw")
@@ -114,7 +117,7 @@ class DynamicParser(BaseParser):
         reader = csv.DictReader(io.StringIO(data_text))
         results = []
         for i, row in enumerate(reader):
-            raw = dict(row)
+            raw = {k: v for k, v in dict(row).items() if k is not None}
             try:
                 parsed = self.parse_row(raw)
                 results.append((i, raw, parsed))

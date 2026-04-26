@@ -46,8 +46,10 @@ export async function reorderCategories(orderedIds: number[]): Promise<void> {
   await client.post('/categories/reorder', { ordered_ids: orderedIds });
 }
 
-export async function listSources(): Promise<Source[]> {
-  const resp = await client.get<{ sources: Source[] }>('/sources');
+export async function listSources(ledgerId?: number): Promise<Source[]> {
+  const resp = await client.get<{ sources: Source[] }>('/sources', {
+    params: ledgerId != null ? { ledger_id: ledgerId } : {},
+  });
   return resp.data.sources;
 }
 

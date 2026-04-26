@@ -21,7 +21,7 @@ export default function ImportForm({ onSuccess, ledgerId }: ImportFormProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchSources = () => {
-    listSources()
+    listSources(ledgerId)
       .then((s) => {
         setSources(s);
         setSelectedSource((prev) => {
@@ -34,7 +34,7 @@ export default function ImportForm({ onSuccess, ledgerId }: ImportFormProps) {
 
   useEffect(() => {
     fetchSources();
-  }, []);
+  }, [ledgerId]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {

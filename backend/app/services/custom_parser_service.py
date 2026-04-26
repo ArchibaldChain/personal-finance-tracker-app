@@ -42,9 +42,6 @@ def create_config(db: Session, payload: CustomParserConfigCreate) -> CustomParse
         created_by_user_id=payload.created_by_user_id,
         skip_rows=payload.skip_rows,
         column_mapping_json=json.dumps(storage_mapping),
-        amount_mode=payload.amount_mode,
-        debit_column=payload.debit_column,
-        credit_column=payload.credit_column,
         date_format=payload.date_format,
         currency=payload.currency,
         account_type=payload.account_type,
@@ -78,12 +75,6 @@ def update_config(db: Session, config_id: int, payload: CustomParserConfigUpdate
         config.skip_rows = payload.skip_rows
     if payload.column_mapping is not None:
         config.column_mapping_json = json.dumps(_invert_mapping(payload.column_mapping))
-    if payload.amount_mode is not None:
-        config.amount_mode = payload.amount_mode
-    if payload.debit_column is not None:
-        config.debit_column = payload.debit_column
-    if payload.credit_column is not None:
-        config.credit_column = payload.credit_column
     if payload.date_format is not None:
         config.date_format = payload.date_format
     if payload.currency is not None:
@@ -117,15 +108,24 @@ def find_matching_config(
     return query.first()
 
 
-def _read_csv_headers(csv_bytes: bytes, skip_rows: int = 0) -> list[str]:
-    """Extract column header names from the CSV, skipping skip_rows lines first."""
+def _read_csv_preview(
+    csv_bytes: bytes, skip_rows: int = 0, max_rows: int = 8
+) -> tuple[list[str], list[dict[str, str]]]:
+    """Return (headers, first max_rows data rows) after skipping skip_rows lines."""
     text = csv_bytes.decode("utf-8-sig")
     lines = text.splitlines()
     if skip_rows >= len(lines):
-        return []
+        return [], []
     data_text = "\n".join(lines[skip_rows:])
     reader = csv.DictReader(io.StringIO(data_text))
-    return list(reader.fieldnames or [])
+    headers = [h for h in (reader.fieldnames or []) if h is not None and h.strip()]
+    rows = [{k: (v or "") for k, v in row.items() if k is not None} for row in reader]
+    return headers, rows[:max_rows]
+
+
+def _read_csv_headers(csv_bytes: bytes, skip_rows: int = 0) -> list[str]:
+    headers, _ = _read_csv_preview(csv_bytes, skip_rows=skip_rows)
+    return headers
 
 
 def preview_parse(
@@ -139,9 +139,6 @@ def preview_parse(
     class _TransientConfig:
         skip_rows = request.skip_rows
         column_mapping_json = json.dumps(_invert_mapping(request.column_mapping))
-        amount_mode = request.amount_mode
-        debit_column = request.debit_column
-        credit_column = request.credit_column
         date_format = request.date_format
         currency = request.currency
         account_type = request.account_type

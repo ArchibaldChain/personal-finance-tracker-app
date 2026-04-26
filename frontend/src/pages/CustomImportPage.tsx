@@ -14,25 +14,39 @@ import type { CustomParserConfig, PreviewRow } from '../types';
 
 type Step = 'upload' | 'configure' | 'preview';
 
+/** Build the column_mapping payload, joining multiple description columns with '|'. */
+function buildPayloadMapping(columnMapping: Record<string, string>): Record<string, string> {
+  const descCols: string[] = [];
+  const result: Record<string, string> = {};
+  for (const [col, field] of Object.entries(columnMapping)) {
+    if (field === 'description') {
+      descCols.push(col);
+    } else if (field !== 'ignore') {
+      result[col] = field;
+    }
+  }
+  if (descCols.length > 0) {
+    result[descCols.join('|')] = 'description';
+  }
+  return result;
+}
+
 export default function CustomImportPage() {
   const { ledgerId } = useApp();
   const navigate = useNavigate();
 
-  // Step state
   const [step, setStep] = useState<Step>('upload');
 
   // File + detection
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [csvPreviewRows, setCsvPreviewRows] = useState<Record<string, string>[]>([]);
   const [matchedConfig, setMatchedConfig] = useState<CustomParserConfig | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
 
   // Config state
   const [skipRows, setSkipRows] = useState(0);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
-  const [amountMode, setAmountMode] = useState<'single' | 'split'>('single');
-  const [debitColumn, setDebitColumn] = useState('');
-  const [creditColumn, setCreditColumn] = useState('');
   const [dateFormat, setDateFormat] = useState('%m/%d/%Y');
   const [currency, setCurrency] = useState('CAD');
   const [accountType, setAccountType] = useState<'debit' | 'credit' | 'investment'>('debit');
@@ -44,45 +58,58 @@ export default function CustomImportPage() {
   const [savedConfig, setSavedConfig] = useState<CustomParserConfig | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importResult, setImportResult] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
   const applyConfig = (config: CustomParserConfig) => {
     const mapping = JSON.parse(config.column_mapping_json) as Record<string, string>;
-    // Invert from storage direction (field→col) to UI direction (col→field)
     const uiMapping: Record<string, string> = {};
     for (const [field, col] of Object.entries(mapping)) {
-      uiMapping[col] = field;
+      if (field === 'description') {
+        // col may be pipe-joined: "Col1|Col2"
+        (col as string).split('|').forEach((c) => { uiMapping[c.trim()] = 'description'; });
+      } else {
+        uiMapping[col as string] = field;
+      }
     }
     setColumnMapping(uiMapping);
     setSkipRows(config.skip_rows);
-    setAmountMode(config.amount_mode);
-    setDebitColumn(config.debit_column ?? '');
-    setCreditColumn(config.credit_column ?? '');
     setDateFormat(config.date_format);
     setCurrency(config.currency);
-    setAccountType(config.account_type);
+    setAccountType(config.account_type as 'debit' | 'credit' | 'investment');
     setSavedConfig(config);
   };
 
-  const handleFileSelected = async (f: File) => {
-    setFile(f);
-    setError(null);
+  const runDetect = async (f: File, rows: number) => {
     setIsDetecting(true);
     try {
-      const result = await detectParser(f, skipRows, ledgerId ?? undefined);
+      const result = await detectParser(f, rows, ledgerId ?? undefined);
       setHeaders(result.headers);
+      setCsvPreviewRows(result.preview_rows);
       setMatchedConfig(result.match);
-      // Default: map each header to 'ignore'
-      const defaultMapping: Record<string, string> = {};
-      result.headers.forEach((h) => { defaultMapping[h] = 'ignore'; });
-      setColumnMapping(defaultMapping);
-      setStep('configure');
+      setColumnMapping((prev) => {
+        const updated: Record<string, string> = {};
+        result.headers.forEach((h) => { updated[h] = prev[h] ?? 'ignore'; });
+        return updated;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to read file');
     } finally {
       setIsDetecting(false);
     }
+  };
+
+  const handleFileSelected = async (f: File) => {
+    setFile(f);
+    setError(null);
+    setColumnMapping({});
+    await runDetect(f, 0);
+    setStep('configure');
+  };
+
+  const handleSkipRowsChange = async (n: number) => {
+    setSkipRows(n);
+    if (file) await runDetect(file, n);
   };
 
   const handlePreview = async () => {
@@ -92,10 +119,7 @@ export default function CustomImportPage() {
     try {
       const result = await previewCustomParser(file, {
         skip_rows: skipRows,
-        column_mapping: columnMapping,
-        amount_mode: amountMode,
-        debit_column: debitColumn || null,
-        credit_column: creditColumn || null,
+        column_mapping: buildPayloadMapping(columnMapping),
         date_format: dateFormat,
         currency,
         account_type: accountType,
@@ -115,20 +139,16 @@ export default function CustomImportPage() {
     setIsSaving(true);
     setError(null);
     try {
-      const payload = {
+      const config = await createCustomParser({
         name: name.trim(),
         skip_rows: skipRows,
-        column_mapping: columnMapping,
-        amount_mode: amountMode,
-        debit_column: debitColumn || null,
-        credit_column: creditColumn || null,
+        column_mapping: buildPayloadMapping(columnMapping),
         date_format: dateFormat,
         currency,
         account_type: accountType,
         csv_headers: headers,
         ledger_id: ledgerId,
-      };
-      const config = await createCustomParser(payload);
+      });
       setSavedConfig(config);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
@@ -143,10 +163,8 @@ export default function CustomImportPage() {
     setError(null);
     try {
       const importRecord = await uploadImport(file, `custom_${savedConfig.id}`, ledgerId ?? undefined);
-      const processed = await processImport(importRecord.id);
-      setImportResult(
-        `Import complete: ${processed.parsed_rows} rows imported${processed.failed_rows > 0 ? `, ${processed.failed_rows} failed` : ''}.`
-      );
+      await processImport(importRecord.id);
+      navigate('/import');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');
     } finally {
@@ -161,7 +179,6 @@ export default function CustomImportPage() {
         <h1 style={styles.title}>Custom CSV Import</h1>
       </div>
 
-      {/* Step indicator */}
       <div style={styles.steps}>
         {(['upload', 'configure', 'preview'] as Step[]).map((s, i) => (
           <div key={s} style={styles.stepItem}>
@@ -179,14 +196,7 @@ export default function CustomImportPage() {
 
       {error && <div style={styles.errorMsg}>{error}</div>}
 
-      {importResult && (
-        <div style={styles.successMsg}>
-          {importResult}{' '}
-          <button onClick={() => navigate('/transactions')} style={styles.viewLink}>View transactions →</button>
-        </div>
-      )}
-
-      <div style={styles.card}>
+<div style={styles.card}>
         {step === 'upload' && (
           <CustomImportUploadStep
             onFileSelected={handleFileSelected}
@@ -198,16 +208,12 @@ export default function CustomImportPage() {
         {step === 'configure' && file && (
           <CustomImportConfigStep
             headers={headers}
+            previewData={csvPreviewRows}
             columnMapping={columnMapping}
             onColumnMappingChange={setColumnMapping}
             skipRows={skipRows}
-            onSkipRowsChange={setSkipRows}
-            amountMode={amountMode}
-            onAmountModeChange={setAmountMode}
-            debitColumn={debitColumn}
-            onDebitColumnChange={setDebitColumn}
-            creditColumn={creditColumn}
-            onCreditColumnChange={setCreditColumn}
+            onSkipRowsChange={handleSkipRowsChange}
+            isReloading={isDetecting}
             dateFormat={dateFormat}
             onDateFormatChange={setDateFormat}
             currency={currency}
@@ -237,7 +243,7 @@ export default function CustomImportPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 860, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 24 },
+  page: { maxWidth: 960, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 24 },
   titleRow: { display: 'flex', alignItems: 'center', gap: 16 },
   backLink: {
     background: 'none', border: 'none', cursor: 'pointer',
@@ -258,14 +264,5 @@ const styles: Record<string, React.CSSProperties> = {
   errorMsg: {
     background: '#fee2e2', color: '#c0392b', padding: '9px 14px',
     borderRadius: 6, fontSize: 14, border: '1px solid #fca5a5',
-  },
-  successMsg: {
-    background: '#f0fdf4', color: '#2d6a4f', padding: '9px 14px',
-    borderRadius: 6, fontSize: 14, border: '1px solid #bbf7d0',
-    display: 'flex', alignItems: 'center', gap: 12,
-  },
-  viewLink: {
-    background: 'none', border: 'none', cursor: 'pointer',
-    color: '#2d6a4f', fontWeight: 600, fontSize: 13, textDecoration: 'underline',
   },
 };

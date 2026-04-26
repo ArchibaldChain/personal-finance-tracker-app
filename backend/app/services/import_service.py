@@ -78,7 +78,8 @@ def store_raw_rows(
             import_id=import_id,
             row_index=row_index,
             raw_json=json.dumps(raw_dict),
-            parse_status="pending",
+            parse_status="pending" if isinstance(result, ParsedRow) else "failed",
+            parse_error=str(result) if not isinstance(result, ParsedRow) else None,
             parsed_json=parsed_json,
         ))
 
@@ -154,6 +155,9 @@ def process_import(db: Session, import_id: int) -> Import:
     failed_count = 0
 
     for row in rows:
+        if row.parse_status == "failed":
+            failed_count += 1
+            continue
         raw = json.loads(row.raw_json)
         try:
             if row.parsed_json is None:
