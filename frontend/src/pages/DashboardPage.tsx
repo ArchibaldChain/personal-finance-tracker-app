@@ -404,6 +404,18 @@ export default function DashboardPage() {
     }
   }, [ledgerId]);
 
+  // On mount, find the most recent transaction date and jump to that month
+  useEffect(() => {
+    listTransactions({ page_size: 1, page: 1, sort_by: 'transaction_date', sort_dir: 'desc', ledger_id: ledgerId ?? undefined })
+      .then((res) => {
+        if (res.items.length > 0) {
+          const [year, month] = res.items[0].transaction_date.split('-').map(Number);
+          setMonth({ year, month });
+        }
+      })
+      .catch(() => {});
+  }, [ledgerId]);
+
   useEffect(() => {
     fetchData(month);
     setActiveCat(null);
