@@ -153,7 +153,7 @@ function TxDetailTable({
   }
 
   const dateCols = showDate ? ['Date', 'Day'] : [];
-  const headers = ['', ...dateCols, 'Merchant', 'Category', 'Subcategory', 'Source', 'Amount', ''];
+  const headers = ['', ...dateCols, 'Description', 'Category', 'Subcategory', 'Source', 'Amount', ''];
 
   return (
     <table style={detailStyles.table}>
@@ -195,7 +195,7 @@ function TxDetailTable({
                   {new Date(tx.transaction_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
                 </td>
               )}
-              <td style={detailStyles.td}>{tx.merchant_normalized || tx.description || '—'}</td>
+              <td style={detailStyles.td}>{tx.description || tx.merchant_normalized || '—'}</td>
 
               {/* Category */}
               <td style={{ ...detailStyles.td, cursor: 'pointer' }} onClick={(e) => openCategoryEdit(tx, e)}>

@@ -24,7 +24,7 @@ interface CellEdit {
 
 const COLUMNS: { key: string; label: string; sortable: boolean }[] = [
   { key: 'transaction_date', label: 'Date', sortable: true },
-  { key: 'merchant_normalized', label: 'Merchant', sortable: true },
+  { key: 'description', label: 'Description', sortable: false },
   { key: 'transaction_type', label: 'Type', sortable: false },
   { key: 'category', label: 'Category', sortable: false },
   { key: 'subcategory', label: 'Subcategory', sortable: false },
@@ -186,7 +186,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                   style={{ background: index % 2 === 0 ? '#fff' : '#fdf9f3', height: 40 }}
                 >
                   <td style={styles.td}>{tx.transaction_date}</td>
-                  <td style={styles.td}>{tx.merchant_normalized || tx.description || '—'}</td>
+                  <td style={styles.td}>{tx.description || tx.merchant_normalized || '—'}</td>
 
                   {/* Type cell */}
                   <td style={styles.td}>
