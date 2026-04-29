@@ -152,8 +152,44 @@ function TxDetailTable({
     });
   }
 
-  const dateCols = showDate ? ['Date', 'Day'] : [];
-  const headers = ['', ...dateCols, 'Description', 'Category', 'Subcategory', 'Source', 'Amount', ''];
+  const COL_COUNT = 7; // checkbox + desc + cat + subcat + source + amount + actions
+  const headers = ['', 'Description', 'Category', 'Subcategory', 'Source', 'Amount', ''];
+
+  const [collapsedDates, setCollapsedDates] = React.useState<Set<string>>(new Set());
+
+  function toggleDate(date: string) {
+    setCollapsedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  }
+
+  // Group by date when showing full month
+  const groups: { date: string; txs: Transaction[] }[] = showDate
+    ? Object.entries(
+        txs.reduce((acc, tx) => {
+          (acc[tx.transaction_date] ??= []).push(tx);
+          return acc;
+        }, {} as Record<string, Transaction[]>)
+      )
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, group]) => ({ date, txs: group }))
+    : [{ date: '', txs }];
+
+  function formatDate(dateStr: string) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return {
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+    };
+  }
+
+  function groupTotal(group: Transaction[]) {
+    const sum = group.reduce((s, tx) => s + Number(tx.amount), 0);
+    const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(sum));
+    return `${sum < 0 ? '-' : '+'}${fmt}`;
+  }
 
   return (
     <table style={detailStyles.table}>
@@ -167,11 +203,29 @@ function TxDetailTable({
               onChange={(e) => toggleAll(e.target.checked)}
             />
           </th>
-          {headers.slice(1).map((h) => <th key={h} style={{ ...detailStyles.th, width: h === 'Date' ? 110 : undefined }}>{h}</th>)}
+          {headers.slice(1).map((h) => <th key={h} style={detailStyles.th}>{h}</th>)}
         </tr>
       </thead>
       <tbody>
-        {txs.map((tx) => {
+        {groups.map(({ date, txs: groupTxs }) => {
+          const collapsed = collapsedDates.has(date);
+          return (
+          <React.Fragment key={date || 'all'}>
+            {showDate && (
+              <tr>
+                <td colSpan={COL_COUNT} style={detailStyles.dateSep}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" onClick={() => toggleDate(date)} style={detailStyles.dayToggle}>
+                      <span style={{ display: 'inline-block', transition: 'transform 0.15s', transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>▶</span>
+                    </button>
+                    <span style={detailStyles.dateSepDate}>{formatDate(date).date}</span>
+                    <span style={detailStyles.dateSepDay}>{formatDate(date).day}</span>
+                    <span style={detailStyles.dateSepTotal}>{groupTotal(groupTxs)}</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!collapsed && groupTxs.map((tx) => {
           const isEditing = cellEdit?.txId === tx.id;
           const displayCat = isEditing ? cellEdit.category : tx.category;
           const displaySub = isEditing ? cellEdit.subcategory : tx.subcategory;
@@ -189,12 +243,6 @@ function TxDetailTable({
                 />
               </td>
 
-              {showDate && <td style={detailStyles.td}>{tx.transaction_date}</td>}
-              {showDate && (
-                <td style={{ ...detailStyles.td, color: '#6b6560' }}>
-                  {new Date(tx.transaction_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
-                </td>
-              )}
               <td style={detailStyles.td}>{tx.description || tx.merchant_normalized || '—'}</td>
 
               {/* Category */}
@@ -257,6 +305,9 @@ function TxDetailTable({
             </tr>
           );
         })}
+          </React.Fragment>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -265,6 +316,11 @@ function TxDetailTable({
 const detailStyles: Record<string, React.CSSProperties> = {
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
   th: { padding: '8px 16px', textAlign: 'left', background: '#faf8f4', borderBottom: '1px solid #e8e4de', fontWeight: 600, color: '#6b6560', fontSize: 12 },
+  dateSep: { padding: '6px 16px', background: '#faf8f4', borderBottom: '1px solid #e8e4de', borderTop: '1px solid #e8e4de' },
+  dayToggle: { background: 'none', border: 'none', cursor: 'pointer', color: '#6b6560', fontSize: 10, padding: '0 4px 0 0', lineHeight: 1 },
+  dateSepDate: { fontWeight: 500, color: '#6b6560', marginRight: 6, whiteSpace: 'nowrap' as const },
+  dateSepDay: { color: '#6b6560', whiteSpace: 'nowrap' as const },
+  dateSepTotal: { fontWeight: 500, color: '#6b6560', whiteSpace: 'nowrap' as const, marginLeft: 'auto' },
   catBadge: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 500 },
   td: { padding: '10px 16px', borderBottom: '1px solid #f3f0eb', color: '#2d2116' },
   select: { padding: '3px 6px', border: '1px solid #c9a84c', borderRadius: 6, fontSize: 12, color: '#2d2116', background: '#fff', outline: 'none', cursor: 'pointer', minWidth: 130 },
