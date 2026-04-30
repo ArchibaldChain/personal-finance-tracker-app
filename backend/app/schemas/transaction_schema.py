@@ -63,6 +63,8 @@ class TransactionRead(BaseModel):
     created_by_user_id: int | None = None
     updated_by_user_id: int | None = None
     is_deleted: bool
+    is_duplicate: bool
+    duplicate_of_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.models.category_model import Category, Subcategory
 from app.models.classification_log_model import ClassificationLog
 from app.models.transaction_model import Transaction
+from app.parsers.base import ParsedRow
 from app.schemas.transaction_schema import TransactionCreate, TransactionUpdate
 from app.services import category_service
 from app.services.classification import get_classifier
@@ -52,12 +53,43 @@ def _resolve_category_ids(
     return cat.id, (sub.id if sub else None)
 
 
+def is_duplicate_transaction(
+    db: Session,
+    parsed: ParsedRow,
+    ledger_id: int | None,
+    source_name: str,
+) -> int | None:
+    """Return the ID of the matching original transaction, or None if not a duplicate."""
+    q = db.query(Transaction).filter(
+        Transaction.is_deleted == False,  # noqa: E712
+        Transaction.ledger_id == ledger_id,
+    )
+    # Tier 1: exact external_id match
+    if parsed.external_id:
+        match = q.filter(Transaction.external_id == parsed.external_id).first()
+        if match:
+            return match.id
+    # Tier 2: fuzzy — same amount, date, source, and description/merchant
+    desc = parsed.description or parsed.merchant_raw
+    if desc:
+        match = q.filter(
+            Transaction.amount == float(parsed.amount),
+            Transaction.transaction_date == parsed.transaction_date,
+            Transaction.source_name == source_name,
+            or_(Transaction.description == desc, Transaction.merchant_raw == desc),
+        ).first()
+        if match:
+            return match.id
+    return None
+
+
 def list_transactions(
     db: Session,
     search: str | None = None,
     category: str | None = None,
     source_type: str | None = None,
     needs_review: bool = False,
+    is_duplicate: bool = False,
     sort_by: str = "transaction_date",
     sort_dir: str = "desc",
     page: int = 1,
@@ -97,6 +129,28 @@ def list_transactions(
             Transaction.classification_confidence.isnot(None),
             Transaction.classification_confidence < LOW_CONFIDENCE_THRESHOLD,
         )
+
+    if is_duplicate:
+        orig_id_q = (
+            db.query(Transaction.duplicate_of_id)
+            .filter(
+                Transaction.is_duplicate == True,  # noqa: E712
+                Transaction.is_deleted == False,  # noqa: E712
+                Transaction.duplicate_of_id.isnot(None),
+            )
+        )
+        if ledger_id is not None:
+            orig_id_q = orig_id_q.filter(Transaction.ledger_id == ledger_id)
+        orig_ids = [r[0] for r in orig_id_q.all() if r[0] is not None]
+        if orig_ids:
+            query = query.filter(
+                or_(
+                    Transaction.is_duplicate == True,  # noqa: E712
+                    Transaction.id.in_(orig_ids),
+                )
+            )
+        else:
+            query = query.filter(Transaction.is_duplicate == True)  # noqa: E712
 
     if date_from:
         query = query.filter(Transaction.transaction_date >= date_from)

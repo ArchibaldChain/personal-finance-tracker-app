@@ -61,6 +61,7 @@ export interface Transaction {
   notes: string | null;
   is_deleted: boolean;
   is_duplicate: boolean;
+  duplicate_of_id: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -21,6 +21,7 @@ from app.services import category_service
 from app.services.classification import get_classifier
 from app.services.classification.category_tree import build_category_tree, build_category_type_map
 from app.services.classification.simple_classifier import SimpleClassifier
+from app.services.transaction_service import is_duplicate_transaction
 
 
 def _get_parser(db: Session, source_name: str) -> BaseParser:
@@ -219,7 +220,7 @@ def process_import(db: Session, import_id: int) -> Import:
                                 desc, transaction_type, category, subcategory, confidence or 0.0,
                             )
 
-                # Extension point: deduplication check on external_id can go here.
+                dup_of_id = is_duplicate_transaction(db, parsed, import_record.ledger_id, import_record.source_name)
 
                 # Resolve category/subcategory names to FK IDs
                 cat_id = cat_name_to_id.get(category) if category else None
@@ -243,6 +244,8 @@ def process_import(db: Session, import_id: int) -> Import:
                     classification_confidence=confidence,
                     notes=parsed.notes,
                     is_deleted=False,
+                    is_duplicate=dup_of_id is not None,
+                    duplicate_of_id=dup_of_id,
                     ledger_id=import_record.ledger_id,
                 )
                 db.add(transaction)
