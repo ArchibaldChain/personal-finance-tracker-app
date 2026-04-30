@@ -15,6 +15,7 @@ export async function listTransactions(
   if (filters.category) params.category = filters.category;
   if (filters.source_type) params.source_type = filters.source_type;
   if (filters.needs_review) params.needs_review = true;
+  if (filters.is_duplicate) params.is_duplicate = true;
   if (filters.sort_by) params.sort_by = filters.sort_by;
   if (filters.sort_dir) params.sort_dir = filters.sort_dir;
   if (filters.page) params.page = filters.page;

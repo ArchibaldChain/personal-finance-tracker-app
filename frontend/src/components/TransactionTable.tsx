@@ -186,7 +186,19 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                   style={{ background: index % 2 === 0 ? '#fff' : '#fdf9f3', height: 40 }}
                 >
                   <td style={styles.td}>{tx.transaction_date}</td>
-                  <td style={styles.td}>{tx.description || tx.merchant_normalized || '—'}</td>
+                  <td style={styles.td}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      {tx.description || tx.merchant_normalized || '—'}
+                      {tx.is_duplicate && (
+                        <span style={styles.dupIcon} title="Possible duplicate transaction">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        </span>
+                      )}
+                    </span>
+                  </td>
 
                   {/* Type cell */}
                   <td style={styles.td}>
@@ -361,6 +373,15 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
     cursor: 'pointer',
     minWidth: 140,
+  },
+  dupIcon: {
+    color: '#c0392b',
+    fontSize: 13,
+    cursor: 'default',
+    lineHeight: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   warningIcon: {
     color: '#d97706',

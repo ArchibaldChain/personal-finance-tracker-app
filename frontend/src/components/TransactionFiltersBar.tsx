@@ -10,6 +10,8 @@ interface TransactionFiltersBarProps {
   onAddClick: () => void;
   month: MonthValue | null;
   onMonthChange: (v: MonthValue | null) => void;
+  hasNeedsReview?: boolean;
+  hasDuplicates?: boolean;
 }
 
 export default function TransactionFiltersBar({
@@ -20,6 +22,8 @@ export default function TransactionFiltersBar({
   onAddClick,
   month,
   onMonthChange,
+  hasNeedsReview = false,
+  hasDuplicates = false,
 }: TransactionFiltersBarProps) {
   const [searchInput, setSearchInput] = useState(filters.search ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,6 +46,10 @@ export default function TransactionFiltersBar({
 
   const handleNeedsReview = () => {
     onChange({ ...filters, needs_review: !filters.needs_review, page: 1 });
+  };
+
+  const handleDuplicates = () => {
+    onChange({ ...filters, is_duplicate: !filters.is_duplicate, page: 1 });
   };
 
   return (
@@ -71,13 +79,27 @@ export default function TransactionFiltersBar({
           <option key={s.key} value={s.key}>{s.display_name}</option>
         ))}
       </select>
-      <button
-        onClick={handleNeedsReview}
-        style={filters.needs_review ? styles.reviewBtnActive : styles.reviewBtn}
-        title="Needs Review"
-      >
-        ⚠
-      </button>
+      {(hasNeedsReview || filters.needs_review) && (
+        <button
+          onClick={handleNeedsReview}
+          style={filters.needs_review ? styles.reviewBtnActive : styles.reviewBtn}
+          title="Needs Review"
+        >
+          ⚠
+        </button>
+      )}
+      {(hasDuplicates || filters.is_duplicate) && (
+        <button
+          onClick={handleDuplicates}
+          style={filters.is_duplicate ? styles.dupBtnActive : styles.dupBtn}
+          title="Duplicates only"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        </button>
+      )}
       <button onClick={onAddClick} style={styles.addBtn}>
         + Add Transaction
       </button>
@@ -124,6 +146,26 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 600,
     whiteSpace: 'nowrap',
+  },
+  dupBtn: {
+    padding: '8px 12px',
+    background: '#fff',
+    color: '#c0392b',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  dupBtnActive: {
+    padding: '8px 12px',
+    background: '#fee2e2',
+    color: '#c0392b',
+    border: '1px solid #c0392b',
+    borderRadius: 6,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
   },
   addBtn: {
     marginLeft: 'auto',

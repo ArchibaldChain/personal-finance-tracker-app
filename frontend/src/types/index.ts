@@ -60,6 +60,7 @@ export interface Transaction {
   classification_confidence: number | null;
   notes: string | null;
   is_deleted: boolean;
+  is_duplicate: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -93,6 +94,7 @@ export interface TransactionFilters {
   category?: string;
   source_type?: string;
   needs_review?: boolean;
+  is_duplicate?: boolean;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
   page?: number;

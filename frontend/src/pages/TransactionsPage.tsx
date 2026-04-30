@@ -51,6 +51,8 @@ export default function TransactionsPage() {
     return f;
   });
   const [data, setData] = useState<TransactionListResponse>({ items: [], total: 0, page: 1, page_size: 50 });
+  const [hasNeedsReview, setHasNeedsReview] = useState(false);
+  const [hasDuplicates, setHasDuplicates] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -70,6 +72,12 @@ export default function TransactionsPage() {
   useEffect(() => {
     fetchTransactions(filters);
   }, [filters, fetchTransactions]);
+
+  useEffect(() => {
+    const base = { page_size: 1, page: 1, ledger_id: ledgerId ?? undefined };
+    listTransactions({ ...base, needs_review: true }).then((r) => setHasNeedsReview(r.total > 0)).catch(() => {});
+    listTransactions({ ...base, is_duplicate: true }).then((r) => setHasDuplicates(r.total > 0)).catch(() => {});
+  }, [ledgerId]);
 
   const handleFiltersChange = (newFilters: TransactionFilters) => {
     setFilters(newFilters);
@@ -117,6 +125,8 @@ export default function TransactionsPage() {
         onAddClick={() => setIsAddOpen(true)}
         month={month}
         onMonthChange={handleMonthChange}
+        hasNeedsReview={hasNeedsReview}
+        hasDuplicates={hasDuplicates}
       />
 
       <TransactionTable
