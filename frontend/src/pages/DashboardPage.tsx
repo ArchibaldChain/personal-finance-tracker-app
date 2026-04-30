@@ -14,6 +14,7 @@ import {
 import { listTransactions, updateTransaction } from '../api/transactions';
 import CategoryIcon from '../components/CategoryIcon';
 import EditTransactionModal from '../components/EditTransactionModal';
+import IconSelect from '../components/IconSelect';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
 import { useApp } from '../context/AppContext';
 import { useCategories } from '../hooks/useCategories';
@@ -248,10 +249,17 @@ function TxDetailTable({
               {/* Category */}
               <td style={{ ...detailStyles.td, cursor: 'pointer' }} onClick={(e) => openCategoryEdit(tx, e)}>
                 {isEditing && cellEdit.openStep === 'category' ? (
-                  <select autoFocus defaultValue="" onChange={(e) => { e.stopPropagation(); handleCategorySelect(tx, e.target.value); }} onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)} onClick={(e) => e.stopPropagation()} style={detailStyles.select}>
-                    <option value="">— None —</option>
-                    {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-                  </select>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <IconSelect
+                      value={cellEdit.category ?? ''}
+                      options={categories.filter((c) => !c.transaction_type || c.transaction_type === tx.transaction_type).map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
+                      onChange={(val) => handleCategorySelect(tx, val)}
+                      onClose={() => setCellEdit((prev) => prev?.openStep === 'category' ? { ...prev, openStep: null } : prev)}
+                      initialOpen
+                      portal
+                      style={{ minWidth: 140 }}
+                    />
+                  </div>
                 ) : displayCat && catColorMap[displayCat] ? (
                   <span style={{ ...detailStyles.catBadge, background: catColorMap[displayCat].bg, color: catColorMap[displayCat].text }}>
                     <CategoryIcon name={catIconMap[displayCat]} size={12} color={catColorMap[displayCat].text} />
@@ -268,10 +276,17 @@ function TxDetailTable({
                 onClick={(e) => { if (isEditing && pendingSubcats.length > 0) { e.stopPropagation(); setCellEdit((prev) => prev ? { ...prev, openStep: 'subcategory' } : null); } }}
               >
                 {isEditing && cellEdit.openStep === 'subcategory' ? (
-                  <select autoFocus defaultValue="" onChange={(e) => { e.stopPropagation(); handleSubcategorySelect(e.target.value); }} onBlur={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)} onClick={(e) => e.stopPropagation()} style={detailStyles.select}>
-                    <option value="">— None —</option>
-                    {pendingSubcats.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <IconSelect
+                      value={cellEdit.subcategory ?? ''}
+                      options={pendingSubcats.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
+                      onChange={(val) => handleSubcategorySelect(val)}
+                      onClose={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
+                      initialOpen
+                      portal
+                      style={{ minWidth: 140 }}
+                    />
+                  </div>
                 ) : (
                   displaySub || '—'
                 )}

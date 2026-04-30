@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import type { Category, Transaction, TransactionCreate } from '../types';
-import IconSelect from './IconSelect';
 
 interface TransactionFormProps {
   initialValues?: Transaction;
@@ -90,6 +89,14 @@ export default function TransactionForm({
   const handleCategoryChange = (cat: string) => {
     setForm((f) => ({ ...f, category: cat, subcategory: '' }));
   };
+
+  const effectiveType = isEdit
+    ? (form.transaction_type ?? null)
+    : (addMode === 'return' ? 'expense' : addMode);
+
+  const filteredCategories = categories.filter(
+    (c) => !c.transaction_type || c.transaction_type === effectiveType
+  );
 
   const subcategories =
     categories.find((c) => c.name === form.category)?.subcategories ?? [];
@@ -269,20 +276,26 @@ export default function TransactionForm({
       <div style={styles.row}>
         <label style={styles.label}>
           Category
-          <IconSelect
+          <select
             value={form.category ?? ''}
-            options={categories.map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
-            onChange={(val) => handleCategoryChange(val)}
-          />
+            onChange={(e) => handleCategoryChange(e.target.value)}
+            style={styles.input}
+          >
+            <option value="">— None —</option>
+            {filteredCategories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
         </label>
         <label style={styles.label}>
           Subcategory
-          <IconSelect
+          <select
             value={form.subcategory ?? ''}
-            options={subcategories.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
-            onChange={(val) => setForm((f) => ({ ...f, subcategory: val }))}
+            onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
+            style={styles.input}
             disabled={subcategories.length === 0}
-          />
+          >
+            <option value="">— None —</option>
+            {subcategories.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
         </label>
       </div>
 

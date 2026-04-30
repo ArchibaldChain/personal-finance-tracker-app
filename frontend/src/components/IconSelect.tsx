@@ -33,18 +33,39 @@ export default function IconSelect({
   portal = false,
 }: IconSelectProps) {
   const [open, setOpen] = useState(initialOpen);
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const selected = options.find((o) => o.value === value) ?? null;
 
-  // Compute portal dropdown position when opening
-  useEffect(() => {
-    if (open && portal && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 180) });
+  function computePos() {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const width = Math.max(rect.width, 180);
+    const IDEAL_HEIGHT = 480;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    let top: number;
+    let maxHeight: number;
+    if (spaceBelow >= Math.min(IDEAL_HEIGHT, 120) || spaceBelow >= spaceAbove) {
+      top = rect.bottom + 2;
+      maxHeight = Math.min(IDEAL_HEIGHT, spaceBelow);
+    } else {
+      maxHeight = Math.min(IDEAL_HEIGHT, spaceAbove);
+      top = rect.top - maxHeight - 2;
     }
+    setDropdownPos({ top, left: rect.left, width, maxHeight });
+  }
+
+  // Recompute position on open and track scroll so dropdown follows its anchor
+  useEffect(() => {
+    if (open && portal) {
+      computePos();
+      window.addEventListener('scroll', computePos, true);
+      return () => window.removeEventListener('scroll', computePos, true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, portal]);
 
   useEffect(() => {
@@ -81,7 +102,7 @@ export default function IconSelect({
         border: '1px solid #e8e4de',
         borderRadius: 4,
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        maxHeight: 400,
+        maxHeight: dropdownPos.maxHeight,
         overflowY: 'auto',
       } : dropdownStyle}
     >

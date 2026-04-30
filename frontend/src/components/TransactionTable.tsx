@@ -224,7 +224,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                       <div onClick={(e) => e.stopPropagation()}>
                         <IconSelect
                           value={cellEdit.category ?? ''}
-                          options={categories.map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
+                          options={categories.filter((c) => !c.transaction_type || c.transaction_type === tx.transaction_type).map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
                           onChange={(val) => handleCategorySelect(tx, val)}
                           onClose={() => setCellEdit((prev) => {
                             if (!prev || prev.openStep !== 'category') return prev;
