@@ -12,8 +12,10 @@ Feature requirements, API contract, and data models for the personal finance tra
 - Edit any field on any transaction via a modal
 - Soft-delete transactions (recoverable, never hard-deleted)
 - View transactions in a paginated, sortable table
-- Filter by: free-text search, category, source type, date range, needs-review flag
+- Filter by: free-text search, category, source type, date range, needs-review flag, duplicates-only flag
 - Sort by: date, amount, merchant
+- Inline category editing in the transaction table and dashboard — options filtered to the transaction's type
+- The "needs review" filter button is shown only when low-confidence transactions exist; the "duplicates" filter button is shown only when duplicate transactions exist
 
 ### F2 — CSV Import
 
@@ -53,8 +55,20 @@ Feature requirements, API contract, and data models for the personal finance tra
 
 - Spending by category (bar/pie chart)
 - Income vs. expense summary
-- Month-over-month comparison
-- Date range selector
+- Daily spending bar chart; click a bar to filter that day's transactions
+- Transactions grouped by section (Expenses / Transfers / Income), each collapsible
+- Within each section, transactions grouped by day with collapsible date separators showing a per-day total
+- Default month is the most recent month that has any transaction data
+- Inline category editing in the detail table (same `IconSelect` component as the transactions page)
+
+### F7 — Duplicate Detection
+
+- At import time, each incoming transaction is checked for duplicates against existing non-deleted transactions in the same ledger
+- **Tier 1 (exact):** if the row has an `external_id`, match against any existing transaction with the same `external_id`
+- **Tier 2 (fuzzy):** same `amount` + `transaction_date` + `source_name` + matching `description` or `merchant_raw`
+- Matched duplicates are flagged `is_duplicate = true` and store `duplicate_of_id` pointing to the original
+- A duplicate icon is shown next to the description in the transaction table
+- The "Duplicates" filter button in the transactions toolbar shows both the flagged duplicates and their originals, so each pair can be reviewed side-by-side
 
 ---
 
@@ -80,6 +94,7 @@ List transactions with filtering, sorting, and pagination.
 | `category` | string | — | Exact match on category name |
 | `source_type` | string | — | `csv` or `manual` |
 | `needs_review` | bool | — | Filter uncategorized / low-confidence transactions |
+| `is_duplicate` | bool | — | When true, returns flagged duplicates AND their originals (paired view) |
 | `date_from` | date | — | Inclusive lower bound (`YYYY-MM-DD`) |
 | `date_to` | date | — | Inclusive upper bound (`YYYY-MM-DD`) |
 | `ledger_id` | int | — | Filter by ledger |
@@ -393,6 +408,8 @@ Returns `{ "status": "ok" }`.
 | `classification_confidence` | float | 0.0–1.0 |
 | `notes` | text? | User notes |
 | `is_deleted` | bool | Soft delete flag |
+| `is_duplicate` | bool | Set at import time if a matching transaction already exists |
+| `duplicate_of_id` | int? | FK → transactions — ID of the original this was matched against |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
 

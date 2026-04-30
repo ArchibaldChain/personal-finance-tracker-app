@@ -110,6 +110,17 @@ When a transaction is created from CSV import, categorization attempts in order:
 
 Each classifier extends `BaseClassifier` and returns a `ClassificationResult` with a `confidence` score (0.0–1.0). Results are cached to avoid repeat API calls.
 
+#### Duplicate Detection
+
+`is_duplicate_transaction()` in `transaction_service.py` runs at import time for each incoming row and returns the ID of the matched original (or `None`).
+
+```
+Tier 1 — exact: external_id non-null AND matches an existing non-deleted transaction in the ledger
+Tier 2 — fuzzy: same amount + transaction_date + source_name + description/merchant_raw
+```
+
+When `is_duplicate=true` is passed to `list_transactions`, the query expands to include both the flagged duplicates and the originals they point to (via `duplicate_of_id`), so the user can review each pair side by side. Transactions without `duplicate_of_id` (imported before this feature) still appear under the filter via `is_duplicate == true` but without their pair.
+
 #### Soft Deletes
 
 Transactions are never hard-deleted. `DELETE /transactions/{id}` sets `is_deleted = true`. All queries filter on `is_deleted = false` by default.
@@ -140,7 +151,7 @@ users (1) ──── (many) ledger_members (many) ──── (1) ledgers
 
 **ledger_members** — Join table for user↔ledger with a `role` (owner / member).
 
-**transactions** — Core table. `amount` is negative for expenses, positive for income. `source_type` is `"csv"` or `"manual"`. `category_id` and `subcategory_id` are nullable FK references (not strings).
+**transactions** — Core table. `amount` is negative for expenses, positive for income. `source_type` is `"csv"` or `"manual"`. `category_id` and `subcategory_id` are nullable FK references (not strings). `is_duplicate` is set at import time; `duplicate_of_id` points to the matched original.
 
 **imports** — One record per uploaded CSV file. Tracks parse progress via `parsed_rows` / `failed_rows` counters.
 
@@ -157,7 +168,7 @@ ix_transactions_transaction_date
 ix_transactions_category_id
 ix_transactions_source_type
 ix_transactions_is_deleted
-ix_transactions_external_id   ← future deduplication
+ix_transactions_external_id   ← used for Tier 1 (exact) duplicate detection
 ```
 
 ---
@@ -178,13 +189,13 @@ Each page owns its own state. There is no global state manager (no Redux, no Zus
 ```
 Layout (nav)
     │
-    ├── DashboardPage     — spending summaries, charts
+    ├── DashboardPage     — spending summaries, charts, collapsible day-grouped detail tables
     ├── TransactionsPage  — owns filters/sort/page state
-    │       ├── TransactionFiltersBar
-    │       ├── TransactionTable
+    │       ├── TransactionFiltersBar  (⚠ and dup buttons visible only when matching rows exist)
+    │       ├── TransactionTable       (inline IconSelect category editor, filtered by tx type)
     │       ├── Pagination
     │       ├── AddTransactionModal
-    │       └── EditTransactionModal
+    │       └── EditTransactionModal   (native <select> for category, filtered by tx type)
     ├── ImportPage
     │       ├── ImportForm (source dropdown with inline delete for custom parsers)
     │       └── ImportHistoryTable (polls every 3s while any import is in-flight)
@@ -196,6 +207,15 @@ Layout (nav)
     ├── ProfilePage       — user profile
     └── LoginPage         — user picker
 ```
+
+### IconSelect — Portal Dropdown
+
+`IconSelect` is a custom dropdown used for inline category editing in the transaction table and dashboard. When used inside an `overflow: hidden` table, it renders the dropdown via `createPortal` into `document.body` (`portal` prop).
+
+Key behaviours in portal mode:
+- Position is computed from `getBoundingClientRect()` on open
+- A `scroll` event listener (capture phase) recomputes position on every scroll, so the dropdown tracks its anchor row
+- If there is insufficient space below the anchor, the dropdown flips upward; `maxHeight` is clamped to the available viewport space in either direction
 
 ### API Client
 
@@ -212,7 +232,6 @@ A response error interceptor extracts the FastAPI `detail` field from error resp
 | New built-in bank parser | Create `parsers/<bank>_parser.py`, register in `parsers/__init__.py` |
 | New custom parser (UI) | Use `/import/custom` wizard; saved as `CustomParserConfig` in DB |
 | New classifier | Extend `BaseClassifier`, wire into `classification/` chain |
-| Deduplication | `transaction_service.create_transaction()` — check `external_id` before insert |
 | Plaid / open banking | New `source_type="plaid"` service, same `transactions` table |
 | Budget rules | New `budgets` table + service; query against `transactions` monthly aggregates |
 | Real auth | Replace `auth_provider="local"` with JWT/OAuth, existing `users` table supports it |
