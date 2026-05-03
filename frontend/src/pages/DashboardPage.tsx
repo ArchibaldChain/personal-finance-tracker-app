@@ -89,6 +89,21 @@ function PencilIcon() {
   );
 }
 
+function EyeIcon({ hidden }: { hidden: boolean }) {
+  return hidden ? (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 }
@@ -108,11 +123,12 @@ interface TxDetailTableProps {
   excludedTxIds: Set<number>;
   setExcludedTxIds: React.Dispatch<React.SetStateAction<Set<number>>>;
   sourcesMap: Record<string, string>;
+  numbersHidden: boolean;
 }
 
 function TxDetailTable({
   txs, showDate, cellEdit, setCellEdit, categories, catMap, catIconMap, catColorMap, onSave, onEditTx,
-  excludedTxIds, setExcludedTxIds, sourcesMap,
+  excludedTxIds, setExcludedTxIds, sourcesMap, numbersHidden,
 }: TxDetailTableProps) {
   function openCategoryEdit(tx: Transaction, e: React.MouseEvent) {
     e.stopPropagation();
@@ -221,7 +237,7 @@ function TxDetailTable({
                     </button>
                     <span style={detailStyles.dateSepDate}>{formatDate(date).date}</span>
                     <span style={detailStyles.dateSepDay}>{formatDate(date).day}</span>
-                    <span style={detailStyles.dateSepTotal}>{groupTotal(groupTxs)}</span>
+                    <span style={detailStyles.dateSepTotal}>{numbersHidden ? '••••' : groupTotal(groupTxs)}</span>
                   </div>
                 </td>
               </tr>
@@ -301,7 +317,7 @@ function TxDetailTable({
 
               {/* Amount */}
               <td style={{ ...detailStyles.td, color: tx.amount > 0 ? '#5a8a6a' : '#c0392b', fontWeight: 500, textAlign: 'right' }}>
-                {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount)}
+                {numbersHidden ? '••••' : `${tx.amount > 0 ? '+' : ''}${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount)}`}
               </td>
 
               {/* Actions */}
@@ -363,6 +379,9 @@ export default function DashboardPage() {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [excludedTxIds, setExcludedTxIds] = useState<Set<number>>(new Set());
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [numbersHidden, setNumbersHidden] = useState(false);
+
+  const fmt = (amount: number) => numbersHidden ? '••••' : formatCurrency(amount);
 
   function toggleSection(label: string) {
     setCollapsedSections((prev) => {
@@ -511,6 +530,14 @@ export default function DashboardPage() {
       <div style={styles.pageHeader}>
         <h1 style={styles.title}>Dashboard</h1>
         <MonthPicker value={month} onChange={(v) => v && setMonth(v)} clearable={false} />
+        <button
+          type="button"
+          onClick={() => setNumbersHidden((h) => !h)}
+          style={styles.eyeBtn}
+          title={numbersHidden ? 'Show amounts' : 'Hide amounts'}
+        >
+          <EyeIcon hidden={numbersHidden} />
+        </button>
       </div>
 
       {isLoading && <div style={styles.loading}>Loading…</div>}
@@ -533,17 +560,17 @@ export default function DashboardPage() {
           <div style={styles.summaryCard}>
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Total Spent</span>
-              <span style={{ ...styles.summaryValue, color: '#c0392b' }}>{formatCurrency(totalSpent)}</span>
+              <span style={{ ...styles.summaryValue, color: '#c0392b' }}>{fmt(totalSpent)}</span>
             </div>
             <div style={styles.summaryDivider} />
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Total Income</span>
-              <span style={styles.summaryValue}>{formatCurrency(totalIncome)}</span>
+              <span style={styles.summaryValue}>{fmt(totalIncome)}</span>
             </div>
             <div style={styles.summaryDivider} />
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Net Income</span>
-              <span style={{ ...styles.summaryValue, color: netIncome >= 0 ? '#5a8a6a' : '#c0392b' }}>{formatCurrency(netIncome)}</span>
+              <span style={{ ...styles.summaryValue, color: netIncome >= 0 ? '#5a8a6a' : '#c0392b' }}>{fmt(netIncome)}</span>
             </div>
             <div style={styles.summaryDivider} />
             <div style={styles.summaryItem}>
@@ -553,7 +580,7 @@ export default function DashboardPage() {
             <div style={styles.summaryDivider} />
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Largest Expense</span>
-              <span style={styles.summaryValue}>{formatCurrency(largestExpense)}</span>
+              <span style={styles.summaryValue}>{fmt(largestExpense)}</span>
             </div>
           </div>
 
@@ -575,11 +602,11 @@ export default function DashboardPage() {
                     tick={{ fontSize: 11, fill: '#6b6560' }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `$${v}`}
+                    tickFormatter={(v) => numbersHidden ? '••••' : `$${v}`}
                     width={50}
                   />
                   <Tooltip
-                    formatter={(value: number) => [formatCurrency(value), 'Spent']}
+                    formatter={(value: number) => [numbersHidden ? '••••' : formatCurrency(value), 'Spent']}
                     labelFormatter={(label) => `Day ${label}`}
                     contentStyle={{ border: '1px solid #e8e4de', borderRadius: 6, fontSize: 13 }}
                   />
@@ -636,12 +663,12 @@ export default function DashboardPage() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value: number) => formatCurrency(value)}
+                        formatter={(value: number) => numbersHidden ? '••••' : formatCurrency(value)}
                         contentStyle={{ border: '1px solid #e8e4de', borderRadius: 6, fontSize: 13 }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={styles.centerLabel}>{formatCurrency(totalSpent)}</div>
+                  <div style={styles.centerLabel}>{fmt(totalSpent)}</div>
                 </div>
                 <div style={styles.legend}>
                   {categoryData.map((entry, i) => (
@@ -652,8 +679,8 @@ export default function DashboardPage() {
                     >
                       <span style={{ ...styles.legendDot, background: WARM_COLORS[i % WARM_COLORS.length] }} />
                       <span style={styles.legendName}>{entry.name}</span>
-                      <span style={styles.legendPct}>{entry.pct.toFixed(1)}%</span>
-                      <span style={styles.legendAmt}>{formatCurrency(entry.value)}</span>
+                      <span style={styles.legendPct}>{numbersHidden ? '••%' : `${entry.pct.toFixed(1)}%`}</span>
+                      <span style={styles.legendAmt}>{numbersHidden ? '••••' : formatCurrency(entry.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -697,7 +724,7 @@ export default function DashboardPage() {
                       <span style={{ ...styles.detailTitle, color: section.accent }}>{section.label}</span>
                       {activeCat && <span style={styles.activeCatBadge}>{activeCat}</span>}
                     </div>
-                    <span style={styles.sectionTotal}>{formatCurrency(sectionTotal)}</span>
+                    <span style={styles.sectionTotal}>{fmt(sectionTotal)}</span>
                   </div>
                   {!collapsed && (
                     <TxDetailTable
@@ -714,6 +741,7 @@ export default function DashboardPage() {
                       excludedTxIds={excludedTxIds}
                       setExcludedTxIds={setExcludedTxIds}
                       sourcesMap={sourcesMap}
+                      numbersHidden={numbersHidden}
                     />
                   )}
                 </div>
@@ -741,6 +769,17 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 24,
   },
   title: { margin: 0, fontSize: 22, fontWeight: 700, color: '#2d2116' },
+  eyeBtn: {
+    background: 'none',
+    border: '1px solid #e8e4de',
+    borderRadius: 6,
+    cursor: 'pointer',
+    color: '#6b6560',
+    padding: '6px 8px',
+    display: 'flex',
+    alignItems: 'center',
+    marginLeft: 'auto',
+  },
   loading: { padding: 48, textAlign: 'center', color: '#6b6560' },
   errorBox: {
     background: '#fee2e2',
