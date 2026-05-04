@@ -32,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function signOut() {
     localStorage.removeItem('activeUserId');
+    localStorage.removeItem('auth_token');
     setActiveUserId(null);
   }
 

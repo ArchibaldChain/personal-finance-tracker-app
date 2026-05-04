@@ -43,7 +43,7 @@ export default function Layout() {
         <div style={styles.userArea}>
           <button style={styles.avatarBtn} onClick={() => navigate('/profile')} title="Edit profile">
             {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={user.displayName} style={styles.avatar} />
+              <img src={user.avatarUrl} alt={user.displayName} style={styles.avatar} referrerPolicy="no-referrer" />
             ) : (
               <div style={styles.avatarInitials}>{initials}</div>
             )}

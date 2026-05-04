@@ -87,7 +87,7 @@ export default function ProfilePage() {
         {/* Avatar preview */}
         <div style={styles.avatarSection}>
           {previewAvatar ? (
-            <img src={previewAvatar} alt={previewName} style={styles.avatarLarge} />
+            <img src={previewAvatar} alt={previewName} style={styles.avatarLarge} referrerPolicy="no-referrer" />
           ) : (
             <div style={styles.avatarInitials}>{getInitials(previewName)}</div>
           )}

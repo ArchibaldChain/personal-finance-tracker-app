@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     CLASSIFICATION_ENABLED: bool = True
     CLASSIFICATION_MODEL: str = "gpt-4o-mini"
+    GOOGLE_CLIENT_ID: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
