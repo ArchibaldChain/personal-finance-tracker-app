@@ -8,6 +8,7 @@ class UserRead(BaseModel):
     display_name: str
     email: str
     avatar_url: str | None = None
+    auth_provider: str = "local"
 
 
 class UserCreate(BaseModel):

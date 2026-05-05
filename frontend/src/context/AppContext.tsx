@@ -8,6 +8,7 @@ interface AppUser {
   displayName: string;
   email: string;
   avatarUrl: string | null;
+  authProvider: string;
 }
 
 interface AppContextValue {
@@ -49,6 +50,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           displayName: ledger.owner.display_name,
           email: ledger.owner.email,
           avatarUrl: ledger.owner.avatar_url,
+          authProvider: ledger.owner.auth_provider,
         });
       })
       .catch(console.error)

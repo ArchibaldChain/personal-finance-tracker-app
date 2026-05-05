@@ -3,6 +3,7 @@ export interface User {
   display_name: string;
   email: string;
   avatar_url: string | null;
+  auth_provider: string;
 }
 
 export interface LedgerRead {

@@ -11,6 +11,7 @@ export default function LoginPage() {
   const { signIn } = useAuth();
   const { allUsers, refreshUsers } = useApp();
   const navigate = useNavigate();
+  const isDev = new URLSearchParams(window.location.search).has('dev');
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -75,72 +76,74 @@ export default function LoginPage() {
 
         {error && <p style={styles.error}>{error}</p>}
 
-        <div style={styles.divider}>
-          <span style={styles.dividerText}>or pick a local account</span>
-        </div>
-
-        {/* Existing user list */}
-        {allUsers.length > 0 && (
-          <div style={styles.userList}>
-            {allUsers.map((u) => (
-              <button key={u.id} style={styles.userRow} onClick={() => handleSignIn(u.id)}>
-                {u.avatar_url ? (
-                  <img src={u.avatar_url} alt={u.display_name} style={styles.avatar} referrerPolicy="no-referrer" />
-                ) : (
-                  <div style={styles.avatarInitials}>{getInitials(u.display_name)}</div>
-                )}
-                <div style={styles.userInfo}>
-                  <span style={styles.userName}>{u.display_name}</span>
-                  <span style={styles.userEmail}>{u.email}</span>
-                </div>
-                <span style={styles.arrow}>→</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div style={styles.divider}>
-          <span style={styles.dividerText}>or create a local account</span>
-        </div>
-
-        {/* Create new account */}
-        {!showCreate ? (
-          <button style={styles.createBtn} onClick={() => setShowCreate(true)}>
-            + Create new account
-          </button>
-        ) : (
-          <form style={styles.form} onSubmit={handleCreateUser}>
-            <p style={styles.formTitle}>New Account</p>
-            <input
-              style={styles.input}
-              placeholder="Display name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              required
-              autoFocus
-            />
-            <input
-              style={styles.input}
-              placeholder="Email"
-              type="email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              required
-            />
-            {error && <p style={styles.error}>{error}</p>}
-            <div style={styles.formButtons}>
-              <button
-                type="button"
-                style={styles.cancelBtn}
-                onClick={() => { setShowCreate(false); setError(null); }}
-              >
-                Cancel
-              </button>
-              <button type="submit" style={styles.submitBtn} disabled={creating}>
-                {creating ? 'Creating…' : 'Create & Sign In'}
-              </button>
+        {isDev && (
+          <>
+            <div style={styles.divider}>
+              <span style={styles.dividerText}>local accounts</span>
             </div>
-          </form>
+
+            {allUsers.filter((u) => u.auth_provider === 'local').length > 0 && (
+              <div style={styles.userList}>
+                {allUsers.filter((u) => u.auth_provider === 'local').map((u) => (
+                  <button key={u.id} style={styles.userRow} onClick={() => handleSignIn(u.id)}>
+                    {u.avatar_url ? (
+                      <img src={u.avatar_url} alt={u.display_name} style={styles.avatar} referrerPolicy="no-referrer" />
+                    ) : (
+                      <div style={styles.avatarInitials}>{getInitials(u.display_name)}</div>
+                    )}
+                    <div style={styles.userInfo}>
+                      <span style={styles.userName}>{u.display_name}</span>
+                      <span style={styles.userEmail}>{u.email}</span>
+                    </div>
+                    <span style={styles.arrow}>→</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div style={styles.divider}>
+              <span style={styles.dividerText}>create local account</span>
+            </div>
+
+            {!showCreate ? (
+              <button style={styles.createBtn} onClick={() => setShowCreate(true)}>
+                + Create new account
+              </button>
+            ) : (
+              <form style={styles.form} onSubmit={handleCreateUser}>
+                <p style={styles.formTitle}>New Account</p>
+                <input
+                  style={styles.input}
+                  placeholder="Display name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <input
+                  style={styles.input}
+                  placeholder="Email"
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  required
+                />
+                {error && <p style={styles.error}>{error}</p>}
+                <div style={styles.formButtons}>
+                  <button
+                    type="button"
+                    style={styles.cancelBtn}
+                    onClick={() => { setShowCreate(false); setError(null); }}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" style={styles.submitBtn} disabled={creating}>
+                    {creating ? 'Creating…' : 'Create & Sign In'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </>
         )}
       </div>
     </div>

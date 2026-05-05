@@ -72,6 +72,7 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
+  const isGoogleAccount = user.authProvider === 'google';
   const previewName = displayName.trim() || user.displayName;
   const previewAvatar = avatarUrl.trim() || null;
   const deleteMatch = deleteInput.trim() === user.displayName;
@@ -114,25 +115,29 @@ export default function ProfilePage() {
           <div style={styles.field}>
             <label style={styles.label}>Email</label>
             <input
-              style={styles.input}
+              style={{ ...styles.input, ...(isGoogleAccount ? styles.inputLocked : {}) }}
               type="email"
               value={email}
-              onChange={(e) => { setEmail(e.target.value); setSuccess(false); }}
+              onChange={(e) => { if (!isGoogleAccount) { setEmail(e.target.value); setSuccess(false); } }}
               placeholder="you@example.com"
+              readOnly={isGoogleAccount}
               required
             />
+            {isGoogleAccount && <p style={styles.hint}>Managed by Google — sign in to sync.</p>}
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Avatar URL <span style={styles.optional}>(optional)</span></label>
-            <input
-              style={styles.input}
-              value={avatarUrl}
-              onChange={(e) => { setAvatarUrl(e.target.value); setSuccess(false); }}
-              placeholder="https://..."
-            />
-            <p style={styles.hint}>Paste a URL to a profile image. Leave blank to use initials.</p>
-          </div>
+          {!isGoogleAccount && (
+            <div style={styles.field}>
+              <label style={styles.label}>Avatar URL <span style={styles.optional}>(optional)</span></label>
+              <input
+                style={styles.input}
+                value={avatarUrl}
+                onChange={(e) => { setAvatarUrl(e.target.value); setSuccess(false); }}
+                placeholder="https://..."
+              />
+              <p style={styles.hint}>Paste a URL to a profile image. Leave blank to use initials.</p>
+            </div>
+          )}
 
           {error && <p style={styles.error}>{error}</p>}
           {success && <p style={styles.successMsg}>Profile saved.</p>}
@@ -240,6 +245,7 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
   },
   hint: { margin: 0, fontSize: 12, color: '#aaa' },
+  inputLocked: { background: '#f5f5f5', color: '#aaa', cursor: 'not-allowed' },
   error: { margin: 0, fontSize: 13, color: '#c0392b' },
   successMsg: { margin: 0, fontSize: 13, color: '#27ae60' },
   saveBtn: {
