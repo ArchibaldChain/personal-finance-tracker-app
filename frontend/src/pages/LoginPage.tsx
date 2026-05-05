@@ -11,7 +11,7 @@ export default function LoginPage() {
   const { signIn } = useAuth();
   const { allUsers, refreshUsers } = useApp();
   const navigate = useNavigate();
-  const isDev = new URLSearchParams(window.location.search).has('dev');
+  const isDev = import.meta.env.DEV && new URLSearchParams(window.location.search).has('dev');
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');

@@ -72,7 +72,7 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
-  const isGoogleAccount = user.authProvider === 'google';
+  const isLocalAccount = user.authProvider === 'local';
   const previewName = displayName.trim() || user.displayName;
   const previewAvatar = avatarUrl.trim() || null;
   const deleteMatch = deleteInput.trim() === user.displayName;
@@ -115,18 +115,18 @@ export default function ProfilePage() {
           <div style={styles.field}>
             <label style={styles.label}>Email</label>
             <input
-              style={{ ...styles.input, ...(isGoogleAccount ? styles.inputLocked : {}) }}
+              style={{ ...styles.input, ...(!isLocalAccount ? styles.inputLocked : {}) }}
               type="email"
               value={email}
-              onChange={(e) => { if (!isGoogleAccount) { setEmail(e.target.value); setSuccess(false); } }}
+              onChange={(e) => { if (isLocalAccount) { setEmail(e.target.value); setSuccess(false); } }}
               placeholder="you@example.com"
-              readOnly={isGoogleAccount}
+              readOnly={!isLocalAccount}
               required
             />
-            {isGoogleAccount && <p style={styles.hint}>Managed by Google — sign in to sync.</p>}
+            {!isLocalAccount && <p style={styles.hint}>Managed by Google — sign in to sync.</p>}
           </div>
 
-          {!isGoogleAccount && (
+          {!!isLocalAccount && (
             <div style={styles.field}>
               <label style={styles.label}>Avatar URL <span style={styles.optional}>(optional)</span></label>
               <input
