@@ -1,10 +1,8 @@
 import type { LedgerRead, User as UserRead } from '../types';
 import client from './client';
 
-export async function getDefaultLedger(userId?: number): Promise<LedgerRead> {
-  const resp = await client.get<LedgerRead>('/ledgers/default', {
-    params: userId != null ? { user_id: userId } : {},
-  });
+export async function getDefaultLedger(): Promise<LedgerRead> {
+  const resp = await client.get<LedgerRead>('/ledgers/default');
   return resp.data;
 }
 

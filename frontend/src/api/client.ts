@@ -21,6 +21,11 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (r) => r,
   (err) => {
+    if (err?.response?.status === 401 && !err?.config?.url?.includes('/auth/')) {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('activeUserId');
+      window.location.href = '/login';
+    }
     const status = err?.response?.status;
     const detail = err?.response?.data?.detail;
     if (detail) {

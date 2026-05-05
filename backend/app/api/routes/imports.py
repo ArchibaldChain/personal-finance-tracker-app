@@ -3,13 +3,15 @@ import json
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core.security import check_ledger_access, get_current_user
 from app.db.session import get_db
 from app.models.custom_parser_config_model import CustomParserConfig
 from app.models.import_model import Import
+from app.models.import_row_model import ImportRow
+from app.models.user_model import User
 from app.parsers import registry
 from app.parsers.dynamic_parser import DynamicParser
 from app.schemas.import_schema import FailedRowRead, ImportListResponse, ImportRead
-from app.models.import_row_model import ImportRow
 from app.services import custom_parser_service, import_service
 
 router = APIRouter(prefix="/imports", tags=["imports"])
@@ -32,14 +34,26 @@ def _to_import_read(db: Session, record: Import) -> ImportRead:
     return read
 
 
+def _check_import_access(import_id: int, user_id: int, db: Session) -> Import:
+    record = import_service.get_import(db, import_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Import {import_id} not found")
+    if record.ledger_id is not None:
+        check_ledger_access(record.ledger_id, user_id, db)
+    return record
+
+
 @router.post("", response_model=ImportRead, status_code=status.HTTP_201_CREATED)
 async def upload_import(
     source_name: str = Form(...),
     file: UploadFile = File(...),
     ledger_id: int | None = Form(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ImportRead:
-    # Resolve the parser — built-in from registry, or custom from DB
+    if ledger_id is not None:
+        check_ledger_access(ledger_id, current_user.id, db)
+
     if source_name.startswith("custom_"):
         try:
             config_id = int(source_name.removeprefix("custom_"))
@@ -58,10 +72,8 @@ async def upload_import(
     content = await file.read()
     file_name = file.filename or "upload.csv"
 
-    # Create the import record
     import_record = import_service.create_import(db, source_name=source_name, file_name=file_name, ledger_id=ledger_id)
 
-    # Parse CSV to raw rows and store them
     try:
         parse_results = parser.parse_csv(content)
     except Exception as e:
@@ -78,22 +90,32 @@ async def upload_import(
 @router.get("", response_model=ImportListResponse)
 def list_imports(
     ledger_id: int | None = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ImportListResponse:
+    if ledger_id is not None:
+        check_ledger_access(ledger_id, current_user.id, db)
     imports = import_service.list_imports(db, ledger_id=ledger_id)
     return ImportListResponse(items=[_to_import_read(db, i) for i in imports], total=len(imports))
 
 
 @router.get("/{import_id}", response_model=ImportRead)
-def get_import(import_id: int, db: Session = Depends(get_db)) -> ImportRead:
-    import_record = import_service.get_import(db, import_id)
-    if not import_record:
-        raise HTTPException(status_code=404, detail=f"Import {import_id} not found")
-    return _to_import_read(db, import_record)
+def get_import(
+    import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ImportRead:
+    record = _check_import_access(import_id, current_user.id, db)
+    return _to_import_read(db, record)
 
 
 @router.get("/{import_id}/failed-rows", response_model=list[FailedRowRead])
-def get_failed_rows(import_id: int, db: Session = Depends(get_db)) -> list[FailedRowRead]:
+def get_failed_rows(
+    import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[FailedRowRead]:
+    _check_import_access(import_id, current_user.id, db)
     rows = (
         db.query(ImportRow)
         .filter(ImportRow.import_id == import_id, ImportRow.parse_status == "failed")
@@ -107,7 +129,12 @@ def get_failed_rows(import_id: int, db: Session = Depends(get_db)) -> list[Faile
 
 
 @router.delete("/{import_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_import(import_id: int, db: Session = Depends(get_db)) -> None:
+def delete_import(
+    import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    _check_import_access(import_id, current_user.id, db)
     try:
         import_service.delete_import(db, import_id)
     except ValueError as e:
@@ -115,7 +142,12 @@ def delete_import(import_id: int, db: Session = Depends(get_db)) -> None:
 
 
 @router.post("/{import_id}/process", response_model=ImportRead)
-def process_import(import_id: int, db: Session = Depends(get_db)) -> ImportRead:
+def process_import(
+    import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ImportRead:
+    _check_import_access(import_id, current_user.id, db)
     try:
         import_record = import_service.process_import(db, import_id)
     except ValueError as e:

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     CLASSIFICATION_ENABLED: bool = True
     CLASSIFICATION_MODEL: str = "gpt-4o-mini"
     GOOGLE_CLIENT_ID: str = ""
+    JWT_SECRET_KEY: str = ""
+    JWT_EXPIRE_DAYS: int = 30
+    ALLOW_LOCAL_AUTH: bool = False
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

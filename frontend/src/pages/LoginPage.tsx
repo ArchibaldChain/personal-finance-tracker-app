@@ -1,7 +1,7 @@
 import { useGoogleLogin } from '@react-oauth/google';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { googleSignIn } from '../api/auth';
+import { googleSignIn, localSignIn } from '../api/auth';
 import { createUser } from '../api/ledgers';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -27,7 +27,8 @@ export default function LoginPage() {
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
-        const user = await googleSignIn(tokenResponse.access_token);
+        const { token, user } = await googleSignIn(tokenResponse.access_token);
+        localStorage.setItem('auth_token', token);
         handleSignIn(user.id);
       } catch {
         setError('Google Sign-In failed. Please try again.');
@@ -37,6 +38,16 @@ export default function LoginPage() {
     scope: 'openid email profile',
   });
 
+  async function handleLocalSignIn(userId: number) {
+    try {
+      const { token, user } = await localSignIn(userId);
+      localStorage.setItem('auth_token', token);
+      handleSignIn(user.id);
+    } catch {
+      setError('Sign-in failed. Please try again.');
+    }
+  }
+
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -44,7 +55,7 @@ export default function LoginPage() {
     try {
       const user = await createUser({ display_name: newName.trim(), email: newEmail.trim() });
       refreshUsers();
-      handleSignIn(user.id);
+      await handleLocalSignIn(user.id);
     } catch {
       setError('Could not create account. Email may already be in use.');
     } finally {
@@ -85,7 +96,7 @@ export default function LoginPage() {
             {allUsers.filter((u) => u.auth_provider === 'local').length > 0 && (
               <div style={styles.userList}>
                 {allUsers.filter((u) => u.auth_provider === 'local').map((u) => (
-                  <button key={u.id} style={styles.userRow} onClick={() => handleSignIn(u.id)}>
+                  <button key={u.id} style={styles.userRow} onClick={() => handleLocalSignIn(u.id)}>
                     {u.avatar_url ? (
                       <img src={u.avatar_url} alt={u.display_name} style={styles.avatar} referrerPolicy="no-referrer" />
                     ) : (

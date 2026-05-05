@@ -1,6 +1,11 @@
 from pydantic import BaseModel, ConfigDict
 
 
+class TokenResponse(BaseModel):
+    token: str
+    user: "UserRead"
+
+
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -40,9 +40,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     listUsers().then(setAllUsers).catch(console.error);
   }
 
-  function loadLedger(userId: number) {
+  function loadLedger() {
     setLoading(true);
-    getDefaultLedger(userId)
+    getDefaultLedger()
       .then((ledger) => {
         setLedgerId(ledger.id);
         setUser({
@@ -58,7 +58,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   function refreshCurrentUser() {
-    if (activeUserId != null) loadLedger(activeUserId);
+    if (activeUserId != null) loadLedger();
   }
 
   // Re-fetch whenever the signed-in user changes
@@ -68,7 +68,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       return;
     }
-    loadLedger(activeUserId);
+    loadLedger();
   }, [activeUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load user list once on mount (needed for login page)

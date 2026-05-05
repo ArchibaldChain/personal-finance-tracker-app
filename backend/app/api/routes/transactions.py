@@ -3,7 +3,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.security import check_ledger_access, get_current_user
 from app.db.session import get_db
+from app.models.transaction_model import Transaction
+from app.models.user_model import Ledger, User
 from app.schemas.transaction_schema import (
     TransactionCreate,
     TransactionListResponse,
@@ -13,6 +16,14 @@ from app.schemas.transaction_schema import (
 from app.services import transaction_service
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+def _check_tx_access(tx_id: int, user_id: int, db: Session) -> Transaction:
+    tx = db.get(Transaction, tx_id)
+    if not tx:
+        raise HTTPException(status_code=404, detail=f"Transaction {tx_id} not found")
+    check_ledger_access(tx.ledger_id, user_id, db)
+    return tx
 
 
 @router.get("", response_model=TransactionListResponse)
@@ -29,8 +40,11 @@ def list_transactions(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     ledger_id: int | None = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TransactionListResponse:
+    if ledger_id is not None:
+        check_ledger_access(ledger_id, current_user.id, db)
     items, total = transaction_service.list_transactions(
         db,
         search=search,
@@ -63,8 +77,11 @@ def get_summary(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     ledger_id: int | None = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    if ledger_id is not None:
+        check_ledger_access(ledger_id, current_user.id, db)
     return transaction_service.get_transaction_summary(
         db,
         search=search,
@@ -78,25 +95,35 @@ def get_summary(
 
 
 @router.get("/{tx_id}", response_model=TransactionRead)
-def get_transaction(tx_id: int, db: Session = Depends(get_db)) -> TransactionRead:
-    transaction = transaction_service.get_transaction(db, tx_id)
-    if not transaction:
-        raise HTTPException(status_code=404, detail=f"Transaction {tx_id} not found")
-    return TransactionRead.model_validate(transaction)
+def get_transaction(
+    tx_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TransactionRead:
+    tx = _check_tx_access(tx_id, current_user.id, db)
+    return TransactionRead.model_validate(tx)
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
 def create_transaction(
-    data: TransactionCreate, db: Session = Depends(get_db)
+    data: TransactionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> TransactionRead:
+    if data.ledger_id is not None:
+        check_ledger_access(data.ledger_id, current_user.id, db)
     transaction = transaction_service.create_transaction(db, data)
     return TransactionRead.model_validate(transaction)
 
 
 @router.patch("/{tx_id}", response_model=TransactionRead)
 def update_transaction(
-    tx_id: int, data: TransactionUpdate, db: Session = Depends(get_db)
+    tx_id: int,
+    data: TransactionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> TransactionRead:
+    _check_tx_access(tx_id, current_user.id, db)
     transaction = transaction_service.update_transaction(db, tx_id, data)
     if not transaction:
         raise HTTPException(status_code=404, detail=f"Transaction {tx_id} not found")
@@ -104,7 +131,12 @@ def update_transaction(
 
 
 @router.delete("/{tx_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_transaction(tx_id: int, db: Session = Depends(get_db)) -> None:
+def delete_transaction(
+    tx_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    _check_tx_access(tx_id, current_user.id, db)
     deleted = transaction_service.delete_transaction(db, tx_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Transaction {tx_id} not found")

@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
+from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.user_model import User
-from app.schemas.ledger_schema import UserRead
+from app.schemas.ledger_schema import TokenResponse, UserRead
 from app.services.ledger_service import create_default_ledger_for_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -20,8 +22,12 @@ class GoogleCredential(BaseModel):
     access_token: str
 
 
-@router.post("/google", response_model=UserRead)
-def google_sign_in(body: GoogleCredential, db: Session = Depends(get_db)) -> UserRead:
+class LocalCredential(BaseModel):
+    user_id: int
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_sign_in(body: GoogleCredential, db: Session = Depends(get_db)) -> TokenResponse:
     req = urllib.request.Request(
         _GOOGLE_USERINFO_URL,
         headers={"Authorization": f"Bearer {body.access_token}"},
@@ -73,4 +79,17 @@ def google_sign_in(body: GoogleCredential, db: Session = Depends(get_db)) -> Use
         db.commit()
         db.refresh(user)
 
-    return UserRead.model_validate(user)
+    token = create_access_token(user.id)
+    return TokenResponse(token=token, user=UserRead.model_validate(user))
+
+
+@router.post("/local", response_model=TokenResponse)
+def local_sign_in(body: LocalCredential, db: Session = Depends(get_db)) -> TokenResponse:
+    settings = get_settings()
+    if not settings.ALLOW_LOCAL_AUTH:
+        raise HTTPException(status_code=403, detail="Local auth is disabled")
+    user = db.get(User, body.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+    token = create_access_token(user.id)
+    return TokenResponse(token=token, user=UserRead.model_validate(user))

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.category_model import Category, Subcategory
 from app.models.import_model import Import
@@ -15,18 +16,19 @@ router = APIRouter(prefix="/ledgers", tags=["ledgers"])
 
 @router.get("/default", response_model=LedgerRead)
 def get_default_ledger(
-    user_id: int | None = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> LedgerRead:
-    """Return the default ledger. Pass ?user_id= to get a specific user's default ledger."""
-    q = (
+    ledger = (
         db.query(Ledger)
         .options(joinedload(Ledger.owner))
-        .filter(Ledger.is_default == True, Ledger.is_archived == False)  # noqa: E712
+        .filter(
+            Ledger.owner_user_id == current_user.id,
+            Ledger.is_default == True,  # noqa: E712
+            Ledger.is_archived == False,  # noqa: E712
+        )
+        .first()
     )
-    if user_id is not None:
-        q = q.filter(Ledger.owner_user_id == user_id)
-    ledger = q.first()
     if not ledger:
         raise HTTPException(status_code=404, detail="No default ledger found")
     return LedgerRead.model_validate(ledger)
@@ -34,14 +36,14 @@ def get_default_ledger(
 
 @router.get("/users", response_model=list[UserRead])
 def list_users(db: Session = Depends(get_db)) -> list[UserRead]:
-    """List all users. Used by the dev user switcher."""
+    """List all users. Used by the dev user switcher (no auth required)."""
     users = db.query(User).filter(User.is_active == True).order_by(User.id).all()  # noqa: E712
     return [UserRead.model_validate(u) for u in users]
 
 
 @router.post("/users", response_model=UserRead, status_code=201)
 def create_user(data: UserCreate, db: Session = Depends(get_db)) -> UserRead:
-    """Create a new user and automatically provision their default ledger."""
+    """Create a new local user. Used by dev mode (no auth required)."""
     auth_provider_user_id = data.auth_provider_user_id or f"local-{data.email}"
 
     if db.query(User).filter(User.email == data.email).first():
@@ -65,8 +67,14 @@ def create_user(data: UserCreate, db: Session = Depends(get_db)) -> UserRead:
 
 
 @router.patch("/users/{user_id}", response_model=UserRead)
-def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)) -> UserRead:
-    """Update a user's profile fields."""
+def update_user(
+    user_id: int,
+    data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserRead:
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -84,19 +92,22 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)) -
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
-    """Hard-delete a user and all their associated data (ledgers, categories, transactions, imports)."""
+def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Find all ledgers owned by this user
     ledger_ids = [
         row[0] for row in db.query(Ledger.id).filter(Ledger.owner_user_id == user_id).all()
     ]
 
     for ledger_id in ledger_ids:
-        # Delete transactions in this ledger
         import_ids = [
             row[0] for row in db.query(Import.id).filter(Import.ledger_id == ledger_id).all()
         ]
@@ -105,7 +116,6 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
         db.query(Transaction).filter(Transaction.ledger_id == ledger_id).delete()
         db.query(Import).filter(Import.ledger_id == ledger_id).delete()
 
-        # Delete categories and subcategories
         cat_ids = [
             row[0] for row in db.query(Category.id).filter(Category.ledger_id == ledger_id).all()
         ]
@@ -113,7 +123,6 @@ def delete_user(user_id: int, db: Session = Depends(get_db)) -> None:
             db.query(Subcategory).filter(Subcategory.category_id == cat_id).delete()
         db.query(Category).filter(Category.ledger_id == ledger_id).delete()
 
-    # Delete ledger memberships and ledgers
     db.query(LedgerMember).filter(LedgerMember.user_id == user_id).delete()
     db.query(LedgerMember).filter(LedgerMember.ledger_id.in_(ledger_ids)).delete()
     db.query(Ledger).filter(Ledger.owner_user_id == user_id).delete()
