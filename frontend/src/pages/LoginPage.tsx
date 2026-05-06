@@ -1,5 +1,4 @@
-import { useGoogleLogin } from '@react-oauth/google';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { googleSignIn, localSignIn } from '../api/auth';
 import { createUser } from '../api/ledgers';
@@ -24,19 +23,30 @@ export default function LoginPage() {
     navigate('/dashboard', { replace: true });
   }
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        const { token, user } = await googleSignIn(tokenResponse.access_token);
+  // On return from Google redirect, the access_token is in the URL hash
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = hash.get('access_token');
+    if (!accessToken) return;
+    window.history.replaceState({}, '', '/login');
+    googleSignIn(accessToken)
+      .then(({ token, user }) => {
         localStorage.setItem('auth_token', token);
         handleSignIn(user.id);
-      } catch {
-        setError('Google Sign-In failed. Please try again.');
-      }
-    },
-    onError: () => setError('Google Sign-In failed. Please try again.'),
-    scope: 'openid email profile',
-  });
+      })
+      .catch(() => setError('Google Sign-In failed. Please try again.'));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function googleLogin() {
+    const params = new URLSearchParams({
+      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
+      redirect_uri: `${window.location.origin}/login`,
+      response_type: 'token',
+      scope: 'openid email profile',
+      prompt: 'consent',
+    });
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  }
 
   async function handleLocalSignIn(userId: number) {
     try {
