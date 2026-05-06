@@ -12,7 +12,7 @@ class Subcategory(Base):
         Integer, ForeignKey("categories.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    icon: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     category: Mapped["Category"] = relationship("Category", back_populates="subcategories")
 
@@ -24,7 +24,7 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    icon: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
     transaction_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     ledger_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ledgers.id"), nullable=True

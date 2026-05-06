@@ -37,7 +37,7 @@ def upgrade() -> None:
             sa.Column("email", sa.String(255), nullable=False),
             sa.Column("display_name", sa.String(255), nullable=False),
             sa.Column("avatar_url", sa.String(500), nullable=True),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
             sa.Column(
                 "created_at",
                 sa.DateTime(),
@@ -65,8 +65,8 @@ def upgrade() -> None:
             sa.Column("name", sa.String(255), nullable=False),
             sa.Column("owner_user_id", sa.Integer(), nullable=False),
             sa.Column("base_currency", sa.String(10), nullable=False, server_default="CAD"),
-            sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-            sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+            sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=sa.text("false")),
             sa.Column(
                 "created_at",
                 sa.DateTime(),
@@ -93,7 +93,7 @@ def upgrade() -> None:
             sa.Column("ledger_id", sa.Integer(), nullable=False),
             sa.Column("user_id", sa.Integer(), nullable=False),
             sa.Column("role", sa.String(50), nullable=False),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
             sa.Column(
                 "joined_at",
                 sa.DateTime(),
@@ -179,7 +179,7 @@ def upgrade() -> None:
     # Insert default ledger (idempotent)
     existing_ledger = bind.execute(
         sa.text(
-            "SELECT id FROM ledgers WHERE owner_user_id = :uid AND is_default = 1 LIMIT 1"
+            "SELECT id FROM ledgers WHERE owner_user_id = :uid AND is_default = true LIMIT 1"
         ),
         {"uid": default_user_id},
     ).fetchone()
@@ -195,7 +195,7 @@ def upgrade() -> None:
         )
     default_ledger_id = bind.execute(
         sa.text(
-            "SELECT id FROM ledgers WHERE owner_user_id = :uid AND is_default = 1 LIMIT 1"
+            "SELECT id FROM ledgers WHERE owner_user_id = :uid AND is_default = true LIMIT 1"
         ),
         {"uid": default_user_id},
     ).fetchone()[0]
@@ -241,20 +241,26 @@ def upgrade() -> None:
     # ------------------------------------------------------------------ #
     cat_cols = _existing_columns(bind, "categories")
     if "ledger_id" not in cat_cols:
-        bind.execute(sa.text("""
-            CREATE TABLE categories_new (
-                id      INTEGER     NOT NULL PRIMARY KEY AUTOINCREMENT,
-                name    VARCHAR(100) NOT NULL,
-                icon    VARCHAR(10),
-                ledger_id INTEGER,
-                UNIQUE (ledger_id, name)
-            )
-        """))
-        bind.execute(sa.text(
-            "INSERT INTO categories_new (id, name, icon) SELECT id, name, icon FROM categories"
-        ))
-        bind.execute(sa.text("DROP TABLE categories"))
-        bind.execute(sa.text("ALTER TABLE categories_new RENAME TO categories"))
+        if bind.dialect.name == "postgresql":
+            op.add_column("categories", sa.Column("ledger_id", sa.Integer(), nullable=True))
+            # Drop the anonymous unique constraint on name, add composite one
+            op.drop_constraint("categories_name_key", "categories", type_="unique")
+            op.create_unique_constraint("uq_category_ledger_name", "categories", ["ledger_id", "name"])
+        else:
+            bind.execute(sa.text("""
+                CREATE TABLE categories_new (
+                    id      INTEGER     NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    name    VARCHAR(100) NOT NULL,
+                    icon    VARCHAR(10),
+                    ledger_id INTEGER,
+                    UNIQUE (ledger_id, name)
+                )
+            """))
+            bind.execute(sa.text(
+                "INSERT INTO categories_new (id, name, icon) SELECT id, name, icon FROM categories"
+            ))
+            bind.execute(sa.text("DROP TABLE categories"))
+            bind.execute(sa.text("ALTER TABLE categories_new RENAME TO categories"))
 
     bind.execute(
         sa.text("UPDATE categories SET ledger_id = :lid WHERE ledger_id IS NULL"),
