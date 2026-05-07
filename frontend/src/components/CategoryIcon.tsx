@@ -104,7 +104,6 @@ import {
   IceCream,
   Joystick,
   Key,
-  Keyboard,
   Keyboard as KeyboardIcon,
   Landmark,
   Laptop,
