@@ -18,6 +18,7 @@ import IconSelect from '../components/IconSelect';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
 import { useApp } from '../context/AppContext';
 import { useCategories } from '../hooks/useCategories';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useSources } from '../hooks/useSources';
 import type { Category, Transaction } from '../types';
 
@@ -209,6 +210,7 @@ function TxDetailTable({
   }
 
   return (
+    <div className="table-scroll">
     <table style={detailStyles.table}>
       <thead>
         <tr>
@@ -341,6 +343,7 @@ function TxDetailTable({
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -365,6 +368,7 @@ export default function DashboardPage() {
   const { ledgerId } = useApp();
   const categories = useCategories();
   const sources = useSources();
+  const isMobile = useIsMobile();
   const sourcesMap = useMemo(
     () => Object.fromEntries(sources.map((s) => [s.key, s.display_name])),
     [sources]
@@ -527,7 +531,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div style={styles.pageHeader}>
+      <div style={styles.pageHeader} className="page-header">
         <h1 style={styles.title}>Dashboard</h1>
         <MonthPicker value={month} onChange={(v) => v && setMonth(v)} clearable={false} />
         <button
@@ -557,34 +561,34 @@ export default function DashboardPage() {
       {!isLoading && !fetchError && hasData && (
         <>
           {/* Summary Card — reflects checked expenses only */}
-          <div style={styles.summaryCard}>
-            <div style={styles.summaryItem}>
+          <div style={styles.summaryCard} className="summary-card">
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Total Spent</span>
               <span style={{ ...styles.summaryValue, color: '#c0392b' }}>{fmt(totalSpent)}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Total Income</span>
               <span style={styles.summaryValue}>{fmt(totalIncome)}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Net Income</span>
               <span style={{ ...styles.summaryValue, color: netIncome >= 0 ? '#5a8a6a' : '#c0392b' }}>{fmt(netIncome)}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Transactions</span>
               <span style={styles.summaryValue}>{txList.length.toLocaleString()}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Largest Expense</span>
               <span style={styles.summaryValue}>{fmt(largestExpense)}</span>
             </div>
           </div>
 
-          <div style={styles.chartsRow}>
+          <div style={styles.chartsRow} className="charts-row">
             {/* Bar Chart */}
             <div style={{ ...styles.card, flex: '1 1 52%', minWidth: 300 }}>
               <h2 style={styles.chartTitle}>Daily Expenses — {monthLabel}</h2>
@@ -638,7 +642,7 @@ export default function DashboardPage() {
             {/* Pie Chart */}
             <div style={{ ...styles.card, flex: '1 1 44%', minWidth: 300, paddingRight: 0 }}>
               <h2 style={styles.chartTitle}>By Category — {monthLabel}</h2>
-              <div style={styles.pieRow}>
+              <div style={styles.pieRow} className="pie-row">
                 <div style={{ flex: '0 0 200px', position: 'relative' }}>
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
@@ -670,7 +674,7 @@ export default function DashboardPage() {
                   </ResponsiveContainer>
                   <div style={styles.centerLabel}>{fmt(totalSpent)}</div>
                 </div>
-                <div style={styles.legend}>
+                <div style={styles.legend} className="pie-legend">
                   {categoryData.map((entry, i) => (
                     <div
                       key={entry.name}

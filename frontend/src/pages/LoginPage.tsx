@@ -79,7 +79,7 @@ export default function LoginPage() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
+      <div style={styles.card} className="login-card">
         <img src={logo} alt="Finance Tracker" style={styles.logo} />
         <h1 style={styles.title}>Finance Tracker</h1>
         <p style={styles.subtitle}>Sign in to continue</p>

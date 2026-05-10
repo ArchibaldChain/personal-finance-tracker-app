@@ -52,7 +52,7 @@ export default function ImportHistoryTable({ imports, onDelete }: ImportHistoryT
   const COLS = ['Date Uploaded', 'Source', 'File Name', 'Status', 'Total Rows', 'Parsed', 'Failed', 'Actions'];
 
   return (
-    <div style={styles.cardWrapper}>
+    <div style={styles.cardWrapper} className="table-scroll">
       <table style={styles.table}>
         <colgroup>
           <col style={{ width: 160 }} />{/* Date */}

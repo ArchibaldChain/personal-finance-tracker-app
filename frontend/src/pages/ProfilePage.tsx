@@ -84,7 +84,7 @@ export default function ProfilePage() {
         <p style={styles.sub}>Manage your account details</p>
       </div>
 
-      <div style={styles.card}>
+      <div style={styles.card} className="profile-card">
         {/* Avatar preview */}
         <div style={styles.avatarSection}>
           {previewAvatar ? (
@@ -149,7 +149,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Danger Zone */}
-      <div style={styles.dangerCard}>
+      <div style={styles.dangerCard} className="profile-danger-card">
         <p style={styles.dangerTitle}>Danger Zone</p>
         {!showDeleteConfirm ? (
           <button
