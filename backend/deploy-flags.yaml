@@ -1,0 +1,3 @@
+--set-env-vars:
+  ALLOW_LOCAL_AUTH: "false"
+  CORS_ORIGINS: '["https://ai-fintrack.com","https://www.ai-fintrack.com"]'

@@ -13,6 +13,7 @@
 - `gcloud` CLI installed and authenticated (`gcloud auth login`)
 - Docker installed locally
 - Active billing account linked to GCP project `ai-fintrack-494915`
+- `backend/.env.production` file with production env vars (gitignored — do not commit)
 
 ---
 
@@ -43,7 +44,7 @@ gcloud builds submit \
 
 ### Deploy to Cloud Run
 
-The Cloud Run service is named `aifintrack-backend`:
+The Cloud Run service is named `aifintrack-backend`. Secrets come from `backend/.env.production`; tricky vars like `CORS_ORIGINS` are in `backend/deploy-flags.yaml` (gcloud handles the JSON array escaping internally):
 
 ```bash
 gcloud run deploy aifintrack-backend \
@@ -51,10 +52,11 @@ gcloud run deploy aifintrack-backend \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "$(grep -v '^#' backend/.env | grep -v '^$' | grep -E '^(DATABASE_URL|GOOGLE_CLIENT_ID|JWT_SECRET_KEY|JWT_EXPIRE_DAYS|OPENAI_API_KEY|CLASSIFICATION_ENABLED|CLASSIFICATION_MODEL)=' | tr '\n' ',' | sed 's/,$//')",CORS_ORIGINS='["https://your-app.pages.dev"]',ALLOW_LOCAL_AUTH=false
+  --flags-file backend/deploy-flags.yaml \
+  --set-env-vars "$(grep -v '^#' backend/.env.production | grep -v '^$' | grep -v 'CORS_ORIGINS\|ALLOW_LOCAL_AUTH' | tr '\n' ',' | sed 's/,$//')"
 ```
 
-Replace `your-app.pages.dev` with your actual Cloudflare Pages URL.
+To update `CORS_ORIGINS`, edit `backend/deploy-flags.yaml` and redeploy.
 
 After deploy, Cloud Run outputs the service URL. You can also look it up anytime:
 
@@ -62,7 +64,7 @@ After deploy, Cloud Run outputs the service URL. You can also look it up anytime
 gcloud run services describe aifintrack-backend --region us-central1 --format "value(status.url)"
 ```
 
-Current URL: `https://aifintrack-backend-kw4jwb35sa-uc.a.run.app`
+Current URL: `https://aifintrack-backend-676441098167.us-central1.run.app`
 
 ### Redeploy after code changes
 
@@ -78,16 +80,11 @@ gcloud run deploy aifintrack-backend \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "$(grep -v '^#' backend/.env | grep -v '^$' | grep -E '^(DATABASE_URL|GOOGLE_CLIENT_ID|JWT_SECRET_KEY|JWT_EXPIRE_DAYS|OPENAI_API_KEY|CLASSIFICATION_ENABLED|CLASSIFICATION_MODEL)=' | tr '\n' ',' | sed 's/,$//')",CORS_ORIGINS='["https://your-app.pages.dev"]',ALLOW_LOCAL_AUTH=false
+  --flags-file backend/deploy-flags.yaml \
+  --set-env-vars "$(grep -v '^#' backend/.env.production | grep -v '^$' | grep -v 'CORS_ORIGINS\|ALLOW_LOCAL_AUTH' | tr '\n' ',' | sed 's/,$//')"
 ```
 
-### Update environment variables only (no redeploy)
-
-```bash
-gcloud run services update aifintrack-backend \
-  --region us-central1 \
-  --set-env-vars CORS_ORIGINS='["https://your-app.pages.dev"]'
-```
+> **Note:** Always use `gcloud run deploy` with `--image` explicitly — do not use `gcloud run services update` as it can fail to resolve the image correctly.
 
 ### List all Cloud Run services
 
@@ -108,8 +105,8 @@ gcloud run services list --region us-central1
    - **Build output directory**: `dist`
    - **Root directory**: `frontend`
 4. Add environment variables:
-   - `VITE_API_BASE_URL` = `https://aifintrack-backend-kw4jwb35sa-uc.a.run.app` (your Cloud Run URL — used by `client.ts` to route API calls to the backend)
-   - `VITE_GOOGLE_CLIENT_ID` = your Google OAuth 2.0 Client ID (same value as `GOOGLE_CLIENT_ID` in `backend/.env`)
+   - `VITE_API_BASE_URL` = `https://aifintrack-backend-676441098167.us-central1.run.app` (Cloud Run URL — routes API calls to the backend)
+   - `VITE_GOOGLE_CLIENT_ID` = Google OAuth 2.0 Client ID (same value as `GOOGLE_CLIENT_ID` in `backend/.env`)
 
 ### Redeploy after frontend changes
 
@@ -120,30 +117,25 @@ Push to your connected git branch — Cloudflare Pages rebuilds and redeploys au
 ## Deployment order for first deploy
 
 1. Deploy backend to Cloud Run → get the Cloud Run URL
-2. Set up Cloudflare Pages → get the `*.pages.dev` URL
-3. Update backend `CORS_ORIGINS` with the Cloudflare URL:
-   ```bash
-   gcloud run services update aifintrack-backend \
-     --region us-central1 \
-     --set-env-vars CORS_ORIGINS='["https://your-app.pages.dev"]'
-   ```
-4. Cloudflare Pages build already has the correct `VITE_API_BASE_URL` from step 1
+2. Set up Cloudflare Pages with `VITE_API_BASE_URL` pointing to Cloud Run URL
+3. Add your custom domain in Cloudflare Pages → **Custom Domains**
+4. Update `CORS_ORIGINS` in `backend/.env.production` to include your custom domain, then redeploy backend
 
 ---
 
 ## Environment variables reference
 
-| Variable | Dev value | Production value |
-|----------|-----------|-----------------|
-| `DATABASE_URL` | `sqlite:///./finance.db` | Neon PostgreSQL URL |
-| `CORS_ORIGINS` | `["http://localhost:5173"]` | `["https://your-app.pages.dev"]` |
+| Variable | Dev (`.env`) | Production (`.env.production`) |
+|----------|-------------|-------------------------------|
+| `DATABASE_URL` | SQLite path | Neon PostgreSQL URL |
+| `CORS_ORIGINS` | `["http://localhost:5173"]` | `["https://ai-fintrack.com","https://www.ai-fintrack.com"]` |
 | `GOOGLE_CLIENT_ID` | same | same |
 | `JWT_SECRET_KEY` | local secret | same (or new) |
 | `JWT_EXPIRE_DAYS` | `30` | `30` |
 | `ALLOW_LOCAL_AUTH` | `true` | `false` |
 | `OPENAI_API_KEY` | optional | optional |
 | `VITE_API_BASE_URL` | unset (uses Vite proxy) | Cloud Run URL |
-| `VITE_GOOGLE_CLIENT_ID` | unset (uses backend value) | Google OAuth 2.0 Client ID |
+| `VITE_GOOGLE_CLIENT_ID` | unset | Google OAuth 2.0 Client ID |
 
 ---
 
@@ -151,11 +143,11 @@ Push to your connected git branch — Cloudflare Pages rebuilds and redeploys au
 
 ```bash
 # Check backend health
-curl https://aifintrack-backend-kw4jwb35sa-uc.a.run.app/health
+curl https://aifintrack-backend-676441098167.us-central1.run.app/health
 
 # View Cloud Run logs
-gcloud run logs read aifintrack-backend --region us-central1
+gcloud run services logs read aifintrack-backend --region us-central1
 
-# List all services (to check for unused ones)
+# List all services
 gcloud run services list --region us-central1
 ```
