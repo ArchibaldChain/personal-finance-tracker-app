@@ -210,7 +210,7 @@ export default function TransactionForm({
         }
       </div>
 
-      <div style={styles.row}>
+      <div style={styles.row} className="form-row">
         <label style={styles.label}>
           Date *
           <input
@@ -237,7 +237,7 @@ export default function TransactionForm({
         </label>
       </div>
 
-      <div style={styles.row}>
+      <div style={styles.row} className="form-row">
         <label style={styles.label}>
           Currency
           <select name="currency" value={form.currency} onChange={handleChange} style={styles.input}>
@@ -273,7 +273,7 @@ export default function TransactionForm({
         />
       </label>
 
-      <div style={styles.row}>
+      <div style={styles.row} className="form-row">
         <label style={styles.label}>
           Category
           <select

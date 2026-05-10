@@ -57,10 +57,10 @@ export default function TransactionFiltersBar({
       <MonthPicker value={month} onChange={onMonthChange} clearable />
       <input
         type="search"
-        placeholder="Search merchant, description…"
+        placeholder="Search…"
         value={searchInput}
         onChange={(e) => setSearchInput(e.target.value)}
-        style={{ ...styles.input, flex: 2, minWidth: 200 }}
+        style={{ ...styles.input, flex: 2, minWidth: 140 }}
       />
       <select
         value={filters.category ?? ''}
@@ -100,7 +100,7 @@ export default function TransactionFiltersBar({
           </svg>
         </button>
       )}
-      <button onClick={onAddClick} style={styles.addBtn}>
+      <button onClick={onAddClick} style={styles.addBtn} className="filters-add-btn">
         + Add Transaction
       </button>
     </div>

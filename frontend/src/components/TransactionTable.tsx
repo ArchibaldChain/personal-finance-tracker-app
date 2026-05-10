@@ -142,7 +142,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
   if (isLoading) return <div style={styles.empty}>Loading…</div>;
 
   return (
-    <div style={styles.wrapper}>
+    <div style={styles.wrapper} className="table-scroll">
       <table style={styles.table}>
         <thead>
           <tr>

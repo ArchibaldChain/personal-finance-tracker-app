@@ -18,6 +18,7 @@ import IconSelect from '../components/IconSelect';
 import MonthPicker, { MonthValue } from '../components/MonthPicker';
 import { useApp } from '../context/AppContext';
 import { useCategories } from '../hooks/useCategories';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useSources } from '../hooks/useSources';
 import type { Category, Transaction } from '../types';
 
@@ -208,7 +209,118 @@ function TxDetailTable({
     return `${sum < 0 ? '-' : '+'}${fmt}`;
   }
 
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div>
+        {groups.map(({ date, txs: groupTxs }) => {
+          const collapsed = collapsedDates.has(date);
+          return (
+            <React.Fragment key={date || 'all'}>
+              {showDate && (
+                <div style={detailStyles.dateSep}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" onClick={() => toggleDate(date)} style={detailStyles.dayToggle}>
+                      <span style={{ display: 'inline-block', transition: 'transform 0.15s', transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>▶</span>
+                    </button>
+                    <span style={detailStyles.dateSepDate}>{formatDate(date).date}</span>
+                    <span style={detailStyles.dateSepDay}>{formatDate(date).day}</span>
+                    <span style={detailStyles.dateSepTotal}>{numbersHidden ? '••••' : groupTotal(groupTxs)}</span>
+                  </div>
+                </div>
+              )}
+              {!collapsed && groupTxs.map((tx) => {
+                const isEditing = cellEdit?.txId === tx.id;
+                const displayCat = isEditing ? cellEdit.category : tx.category;
+                const displaySub = isEditing ? cellEdit.subcategory : tx.subcategory;
+                const pendingSubcats = isEditing && cellEdit.category ? (catMap[cellEdit.category]?.subcategories ?? []) : [];
+                const excluded = excludedTxIds.has(tx.id);
+                return (
+                  <div key={tx.id} style={{ borderBottom: '1px solid #f3f0eb', padding: '8px 12px', opacity: excluded ? 0.4 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Checkbox — vertically centered across both rows */}
+                    <input
+                      type="checkbox"
+                      checked={!excluded}
+                      onChange={() => toggleTx(tx.id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    {/* Two-row content */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                      {/* Row 1: Category · Subcategory · Amount */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {isEditing && cellEdit.openStep === 'category' ? (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <IconSelect
+                              value={cellEdit.category ?? ''}
+                              options={categories.filter((c) => !c.transaction_type || c.transaction_type === tx.transaction_type).map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
+                              onChange={(val) => handleCategorySelect(tx, val)}
+                              onClose={() => setCellEdit((prev) => prev?.openStep === 'category' ? { ...prev, openStep: null } : prev)}
+                              initialOpen portal style={{ minWidth: 140 }}
+                            />
+                          </div>
+                        ) : (
+                          <span onClick={(e) => openCategoryEdit(tx, e)} style={{ cursor: 'pointer' }}>
+                            {displayCat && catColorMap[displayCat] ? (
+                              <span style={{ ...detailStyles.catBadge, background: catColorMap[displayCat].bg, color: catColorMap[displayCat].text }}>
+                                <CategoryIcon name={catIconMap[displayCat]} size={12} color={catColorMap[displayCat].text} />
+                                {displayCat}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#c8c4be', fontSize: 12 }}>—</span>
+                            )}
+                          </span>
+                        )}
+                        {isEditing && cellEdit.openStep === 'subcategory' ? (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <IconSelect
+                              value={cellEdit.subcategory ?? ''}
+                              options={pendingSubcats.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
+                              onChange={(val) => handleSubcategorySelect(val)}
+                              onClose={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
+                              initialOpen portal style={{ minWidth: 140 }}
+                            />
+                          </div>
+                        ) : displaySub ? (
+                          <span style={{ fontSize: 11, color: '#6b6560' }}>{displaySub}</span>
+                        ) : null}
+                        <span style={{ marginLeft: 'auto', color: tx.amount > 0 ? '#5a8a6a' : '#c0392b', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap' }}>
+                          {numbersHidden ? '••••' : `${tx.amount > 0 ? '+' : ''}${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount)}`}
+                        </span>
+                      </div>
+                      {/* Row 2: Description · Source */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ flex: 1, fontSize: 12, color: '#6b6560', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {tx.description || tx.merchant_normalized || '—'}
+                        </span>
+                        <span style={{ ...detailStyles.sourceBadge, fontSize: 11 }}>
+                          {tx.source_type === 'manual' ? 'Manual' : (sourcesMap[tx.source_name ?? ''] ?? tx.source_name ?? 'CSV')}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Edit / Save+Cancel — vertically centered across both rows */}
+                    {isEditing && cellEdit.openStep !== 'category' ? (
+                      <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
+                        <button type="button" onClick={onSave} style={detailStyles.saveBtn} title="Save">✓</button>
+                        <button type="button" onClick={() => setCellEdit(null)} style={detailStyles.cancelBtn} title="Cancel">✕</button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); onEditTx(tx); }} style={detailStyles.editBtn} title="Edit transaction">
+                        <PencilIcon />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
+    <div className="table-scroll">
     <table style={detailStyles.table}>
       <thead>
         <tr>
@@ -341,6 +453,7 @@ function TxDetailTable({
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -365,6 +478,7 @@ export default function DashboardPage() {
   const { ledgerId } = useApp();
   const categories = useCategories();
   const sources = useSources();
+  const isMobile = useIsMobile();
   const sourcesMap = useMemo(
     () => Object.fromEntries(sources.map((s) => [s.key, s.display_name])),
     [sources]
@@ -527,7 +641,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div style={styles.pageHeader}>
+      <div style={styles.pageHeader} className="page-header">
         <h1 style={styles.title}>Dashboard</h1>
         <MonthPicker value={month} onChange={(v) => v && setMonth(v)} clearable={false} />
         <button
@@ -557,34 +671,34 @@ export default function DashboardPage() {
       {!isLoading && !fetchError && hasData && (
         <>
           {/* Summary Card — reflects checked expenses only */}
-          <div style={styles.summaryCard}>
-            <div style={styles.summaryItem}>
+          <div style={styles.summaryCard} className="summary-card">
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Total Spent</span>
               <span style={{ ...styles.summaryValue, color: '#c0392b' }}>{fmt(totalSpent)}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Total Income</span>
               <span style={styles.summaryValue}>{fmt(totalIncome)}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Net Income</span>
               <span style={{ ...styles.summaryValue, color: netIncome >= 0 ? '#5a8a6a' : '#c0392b' }}>{fmt(netIncome)}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Transactions</span>
               <span style={styles.summaryValue}>{txList.length.toLocaleString()}</span>
             </div>
-            <div style={styles.summaryDivider} />
-            <div style={styles.summaryItem}>
+            {!isMobile && <div style={styles.summaryDivider} className="summary-divider" />}
+            <div style={styles.summaryItem} className="summary-item">
               <span style={styles.summaryLabel}>Largest Expense</span>
               <span style={styles.summaryValue}>{fmt(largestExpense)}</span>
             </div>
           </div>
 
-          <div style={styles.chartsRow}>
+          <div style={styles.chartsRow} className="charts-row">
             {/* Bar Chart */}
             <div style={{ ...styles.card, flex: '1 1 52%', minWidth: 300 }}>
               <h2 style={styles.chartTitle}>Daily Expenses — {monthLabel}</h2>
@@ -638,7 +752,7 @@ export default function DashboardPage() {
             {/* Pie Chart */}
             <div style={{ ...styles.card, flex: '1 1 44%', minWidth: 300, paddingRight: 0 }}>
               <h2 style={styles.chartTitle}>By Category — {monthLabel}</h2>
-              <div style={styles.pieRow}>
+              <div style={styles.pieRow} className="pie-row">
                 <div style={{ flex: '0 0 200px', position: 'relative' }}>
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
@@ -670,7 +784,7 @@ export default function DashboardPage() {
                   </ResponsiveContainer>
                   <div style={styles.centerLabel}>{fmt(totalSpent)}</div>
                 </div>
-                <div style={styles.legend}>
+                <div style={styles.legend} className="pie-legend">
                   {categoryData.map((entry, i) => (
                     <div
                       key={entry.name}
@@ -835,7 +949,7 @@ const styles: Record<string, React.CSSProperties> = {
   legendDot: { width: 10, height: 10, borderRadius: '50%', flexShrink: 0 },
   legendName: { flex: 1, color: '#2d2116', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   legendPct: { color: '#6b6560', minWidth: 36, textAlign: 'right' },
-  legendAmt: { color: '#2d2116', fontWeight: 500, minWidth: 64, textAlign: 'right' },
+  legendAmt: { color: '#2d2116', fontWeight: 500, minWidth: 64, textAlign: 'right', paddingRight: 8 },
   sectionHeader: {
     display: 'flex',
     alignItems: 'center',

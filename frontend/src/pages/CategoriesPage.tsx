@@ -344,7 +344,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div style={styles.layout}>
+    <div style={styles.layout} className="categories-layout">
       <style>{`
         .cat-btn-primary:active { background: #a8872f !important; transform: scale(0.96); }
         .cat-btn-cancel:active  { background: #ece8e0 !important; transform: scale(0.96); }
@@ -352,8 +352,8 @@ export default function CategoriesPage() {
         .cat-btn-primary, .cat-btn-cancel, .cat-btn-sub { transition: background 0.1s, transform 0.08s; }
       `}</style>
       {/* Left Panel */}
-      <div style={styles.leftPanel}>
-        <div style={styles.leftScroll}>
+      <div style={styles.leftPanel} className="categories-left-panel">
+        <div style={styles.leftScroll} className="categories-left-scroll">
           {(() => {
             const TYPE_ORDER = ['expense', 'income', 'transfer'] as const;
             const TYPE_LABELS: Record<string, string> = { expense: 'Expense', income: 'Income', transfer: 'Transfer' };

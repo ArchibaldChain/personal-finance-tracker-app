@@ -203,7 +203,7 @@ export default function ImportForm({ onSuccess, ledgerId }: ImportFormProps) {
       </div>
 
       <div style={styles.footer}>
-        <button type="submit" style={styles.importBtn} disabled={isLoading || !file}>
+        <button type="submit" style={styles.importBtn} className="filters-add-btn" disabled={isLoading || !file}>
           {isLoading ? 'Importing…' : 'Import'}
         </button>
       </div>
