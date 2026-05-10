@@ -76,7 +76,6 @@ table tr:hover td {
 
   .pie-legend {
     max-height: none !important;
-    padding-right: 0 !important;
   }
 
   /* Categories layout stacks on mobile */
