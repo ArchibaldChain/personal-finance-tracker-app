@@ -34,3 +34,6 @@ htmlcov/
 
 # Data
 real_transactions_data/
+
+# Claude
+.claude/
