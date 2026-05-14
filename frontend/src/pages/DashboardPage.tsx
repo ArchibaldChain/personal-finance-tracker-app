@@ -119,7 +119,7 @@ interface TxDetailTableProps {
   catMap: Record<string, Category>;
   catIconMap: Record<string, string>;
   catColorMap: Record<string, { bg: string; text: string }>;
-  onSave: () => void;
+  onAutoSave: (txId: number, category: string | null, subcategory: string | null) => void;
   onEditTx: (tx: Transaction) => void;
   excludedTxIds: Set<number>;
   setExcludedTxIds: React.Dispatch<React.SetStateAction<Set<number>>>;
@@ -128,7 +128,7 @@ interface TxDetailTableProps {
 }
 
 function TxDetailTable({
-  txs, showDate, cellEdit, setCellEdit, categories, catMap, catIconMap, catColorMap, onSave, onEditTx,
+  txs, showDate, cellEdit, setCellEdit, categories, catMap, catIconMap, catColorMap, onAutoSave, onEditTx,
   excludedTxIds, setExcludedTxIds, sourcesMap, numbersHidden,
 }: TxDetailTableProps) {
   function openCategoryEdit(tx: Transaction, e: React.MouseEvent) {
@@ -143,11 +143,19 @@ function TxDetailTable({
   function handleCategorySelect(tx: Transaction, value: string) {
     const cat = value || null;
     const subcats = cat ? (catMap[cat]?.subcategories ?? []) : [];
-    setCellEdit({ txId: tx.id, category: cat, subcategory: null, openStep: subcats.length > 0 ? 'subcategory' : null });
+    if (subcats.length > 0) {
+      setCellEdit({ txId: tx.id, category: cat, subcategory: null, openStep: 'subcategory' });
+    } else {
+      setCellEdit(null);
+      onAutoSave(tx.id, cat, null);
+    }
   }
 
   function handleSubcategorySelect(value: string) {
-    setCellEdit((prev) => prev ? { ...prev, subcategory: value || null, openStep: null } : null);
+    if (!cellEdit) return;
+    const { txId, category } = cellEdit;
+    setCellEdit(null);
+    onAutoSave(txId, category, value || null);
   }
 
   function toggleTx(id: number) {
@@ -255,7 +263,7 @@ function TxDetailTable({
                               value={cellEdit.category ?? ''}
                               options={categories.filter((c) => !c.transaction_type || c.transaction_type === tx.transaction_type).map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
                               onChange={(val) => handleCategorySelect(tx, val)}
-                              onClose={() => setCellEdit((prev) => prev?.openStep === 'category' ? { ...prev, openStep: null } : prev)}
+                              onClose={() => setCellEdit(null)}
                               initialOpen portal style={{ minWidth: 140 }}
                             />
                           </div>
@@ -277,7 +285,7 @@ function TxDetailTable({
                               value={cellEdit.subcategory ?? ''}
                               options={pendingSubcats.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
                               onChange={(val) => handleSubcategorySelect(val)}
-                              onClose={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
+                              onClose={() => setCellEdit(null)}
                               initialOpen portal style={{ minWidth: 140 }}
                             />
                           </div>
@@ -298,17 +306,10 @@ function TxDetailTable({
                         </span>
                       </div>
                     </div>
-                    {/* Edit / Save+Cancel — vertically centered across both rows */}
-                    {isEditing && cellEdit.openStep !== 'category' ? (
-                      <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
-                        <button type="button" onClick={onSave} style={detailStyles.saveBtn} title="Save">✓</button>
-                        <button type="button" onClick={() => setCellEdit(null)} style={detailStyles.cancelBtn} title="Cancel">✕</button>
-                      </div>
-                    ) : (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); onEditTx(tx); }} style={detailStyles.editBtn} title="Edit transaction">
-                        <PencilIcon />
-                      </button>
-                    )}
+                    {/* Edit button */}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); onEditTx(tx); }} style={detailStyles.editBtn} title="Edit transaction">
+                      <PencilIcon />
+                    </button>
                   </div>
                 );
               })}
@@ -382,7 +383,7 @@ function TxDetailTable({
                       value={cellEdit.category ?? ''}
                       options={categories.filter((c) => !c.transaction_type || c.transaction_type === tx.transaction_type).map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
                       onChange={(val) => handleCategorySelect(tx, val)}
-                      onClose={() => setCellEdit((prev) => prev?.openStep === 'category' ? { ...prev, openStep: null } : prev)}
+                      onClose={() => setCellEdit(null)}
                       initialOpen
                       portal
                       style={{ minWidth: 140 }}
@@ -409,7 +410,7 @@ function TxDetailTable({
                       value={cellEdit.subcategory ?? ''}
                       options={pendingSubcats.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
                       onChange={(val) => handleSubcategorySelect(val)}
-                      onClose={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
+                      onClose={() => setCellEdit(null)}
                       initialOpen
                       portal
                       style={{ minWidth: 140 }}
@@ -434,16 +435,9 @@ function TxDetailTable({
 
               {/* Actions */}
               <td style={{ ...detailStyles.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {isEditing && cellEdit.openStep !== 'category' ? (
-                  <div style={{ display: 'inline-flex', gap: 4 }}>
-                    <button type="button" onClick={onSave} style={detailStyles.saveBtn} title="Save">✓</button>
-                    <button type="button" onClick={() => setCellEdit(null)} style={detailStyles.cancelBtn} title="Cancel">✕</button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={(e) => { e.stopPropagation(); onEditTx(tx); }} style={detailStyles.editBtn} title="Edit transaction">
-                    <PencilIcon />
-                  </button>
-                )}
+                <button type="button" onClick={(e) => { e.stopPropagation(); onEditTx(tx); }} style={detailStyles.editBtn} title="Edit transaction">
+                  <PencilIcon />
+                </button>
               </td>
             </tr>
           );
@@ -522,9 +516,8 @@ export default function DashboardPage() {
     [categories]
   );
 
-  async function handleSave() {
-    if (!cellEdit) return;
-    await updateTransaction(cellEdit.txId, { category: cellEdit.category, subcategory: cellEdit.subcategory });
+  async function handleAutoSave(txId: number, category: string | null, subcategory: string | null) {
+    await updateTransaction(txId, { category, subcategory });
     setCellEdit(null);
     fetchData(month);
   }
@@ -850,7 +843,7 @@ export default function DashboardPage() {
                       catMap={catMap}
                       catIconMap={catIconMap}
                       catColorMap={catColorMap}
-                      onSave={handleSave}
+                      onAutoSave={handleAutoSave}
                       onEditTx={setSelectedTx}
                       excludedTxIds={excludedTxIds}
                       setExcludedTxIds={setExcludedTxIds}

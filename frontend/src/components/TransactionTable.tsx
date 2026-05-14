@@ -101,18 +101,20 @@ function openCategoryDropdown(tx: Transaction, e: React.MouseEvent) {
   function handleCategorySelect(tx: Transaction, value: string) {
     const cat = value || null;
     const subcats = categories.find((c) => c.name === cat)?.subcategories ?? [];
-    setCellEdit({
-      txId: tx.id,
-      category: cat,
-      subcategory: null,
-      openStep: subcats.length > 0 ? 'subcategory' : null,
-    });
+    if (subcats.length > 0) {
+      setCellEdit({ txId: tx.id, category: cat, subcategory: null, openStep: 'subcategory' });
+    } else {
+      setCellEdit(null);
+      onCategoryChange(tx.id, cat, null);
+    }
   }
 
-function handleSubcategorySelect(value: string) {
-  if (!cellEdit) return;
-  setCellEdit({ ...cellEdit, subcategory: value || null, openStep: null });
-}
+  function handleSubcategorySelect(value: string) {
+    if (!cellEdit) return;
+    const { txId, category } = cellEdit;
+    setCellEdit(null);
+    onCategoryChange(txId, category, value || null);
+  }
 
 function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
   e.stopPropagation();
@@ -123,16 +125,6 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
     return { ...prev, openStep: 'subcategory' };
   });
 }
-
-  function handleSave() {
-    if (!cellEdit) return;
-    onCategoryChange(cellEdit.txId, cellEdit.category, cellEdit.subcategory);
-    setCellEdit(null);
-  }
-
-  function handleCancel() {
-    setCellEdit(null);
-  }
 
   const SortIndicator = ({ field }: { field: string }) => {
     if (filters.sort_by !== field) return <span style={{ color: '#c8c4be' }}> ↕</span>;
@@ -226,10 +218,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                           value={cellEdit.category ?? ''}
                           options={categories.filter((c) => !c.transaction_type || c.transaction_type === tx.transaction_type).map((c) => ({ value: c.name, label: c.name, icon: c.icon }))}
                           onChange={(val) => handleCategorySelect(tx, val)}
-                          onClose={() => setCellEdit((prev) => {
-                            if (!prev || prev.openStep !== 'category') return prev;
-                            return { ...prev, openStep: null };
-                          })}
+                          onClose={() => setCellEdit(null)}
                           initialOpen
                           portal
                           style={{ minWidth: 140 }}
@@ -273,7 +262,7 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                           value={cellEdit.subcategory ?? ''}
                           options={pendingSubcats.map((s) => ({ value: s.name, label: s.name, icon: s.icon }))}
                           onChange={(val) => handleSubcategorySelect(val)}
-                          onClose={() => setCellEdit((prev) => prev ? { ...prev, openStep: null } : null)}
+                          onClose={() => setCellEdit(null)}
                           initialOpen
                           portal
                           style={{ minWidth: 140 }}
@@ -296,37 +285,16 @@ function openSubcategoryDropdown(tx: Transaction, e: React.MouseEvent) {
                     </span>
                   </td>
 
-                  {/* Edit / Save+Cancel column */}
+                  {/* Edit column */}
                   <td style={{ ...styles.td, textAlign: 'center', padding: '6px 8px' }}>
-                    {isEditing && cellEdit.openStep !== 'category' ? (
-                      <div style={{ display: 'inline-flex', gap: 4 }}>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleSave(); }}
-                          style={styles.saveBtn}
-                          title="Save"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleCancel(); }}
-                          style={styles.cancelBtn}
-                          title="Cancel"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onRowClick(tx); }}
-                        style={styles.editBtn}
-                        title="Edit transaction"
-                      >
-                        <PencilIcon />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onRowClick(tx); }}
+                      style={styles.editBtn}
+                      title="Edit transaction"
+                    >
+                      <PencilIcon />
+                    </button>
                   </td>
                 </tr>
               );

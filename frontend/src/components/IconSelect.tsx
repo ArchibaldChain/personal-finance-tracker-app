@@ -75,13 +75,13 @@ export default function IconSelect({
       // Also check portal dropdown if rendered
       const portalDropdown = document.getElementById('icon-select-portal-dropdown');
       const outsidePortal = !portalDropdown || !portalDropdown.contains(target);
-      if (outsideRef && outsidePortal) {
+      if (outsideRef && outsidePortal && open) {
         setOpen(false);
         onClose?.();
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, [onClose]);
 
   function handleSelect(val: string) {
@@ -92,6 +92,7 @@ export default function IconSelect({
   const dropdown = open && (
     <div
       id={portal ? 'icon-select-portal-dropdown' : undefined}
+      onClick={(e) => e.stopPropagation()}
       style={portal && dropdownPos ? {
         position: 'fixed',
         top: dropdownPos.top,
